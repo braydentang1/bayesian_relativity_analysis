@@ -20,8 +20,8 @@ Import the data and convert the rating variables to factors.
 ```{r Read in Data}
 
 data <- read_csv("../../data/motorins.csv") %>%
-	mutate(severity = ifelse(claim_count != 0, claim_payments / claim_count, 0)) %>%
 	mutate(
+		severity = ifelse(claim_count != 0, claim_payments / claim_count, 0), 
 		kilometres = as.factor(kilometres),
 		zone = as.factor(zone),
 		bonus = as.factor(bonus),
@@ -33,7 +33,8 @@ data <- read_csv("../../data/motorins.csv") %>%
 
 ## Preprocessing
 
-Basically, create a design matrix where the rating variables are one hot encoded.
+Basically, create a design matrix where the rating variables are one hot 
+encoded.
 
 ```{r Preprocess}
 
@@ -45,7 +46,13 @@ prepped_recipe <- prep(preprocessing, training = data)
 X <- juice(prepped_recipe) %>%
 	mutate(intercept = rep(1, nrow(.))) %>%
 	relocate(intercept) %>%
-	select(-vehicle_exposure_years, -claim_payments, -severity, -claim_count, -observed_pp) 
+	select(
+		-vehicle_exposure_years,
+		-claim_payments,
+		-severity, 
+		-claim_count, 
+		-observed_pp
+		) 
 
 # This is the data_list passed to Stan.
 data_list <- list(
@@ -61,10 +68,10 @@ data_list <- list(
 
 ## Fit the Bayesian Models in Stan
 
+Compile, and then save the model to a serialized R file. Fit the Poisson-Gamma 
+model first. This is a pretty traditional model.
+
 ### Poisson Frequency, Weighted Gamma Severity
-
-Compile, and then save the model to a serialized R file.
-
 ```{r Stan - Poisson Gamma Fit}
 
 sm_poisson_gamma <- stan_model(file = "../stan/poisson-weighted_gamma.stan")
@@ -85,7 +92,26 @@ saveRDS(fit_poisson_gamma, "../../results/poisson-weighted_gamma.rds")
 Extract the samples, and calculate parameters required to simulate from the
 posterior predictive distributions for both the Poisson and weighted gamma.
 
-```{r}
+```{r Helper Function For Extraction of Posterior Parameters}
+#' Extract the required mean/dispersion parameters for both candidate frequency
+#` and severity distributions.
+#'
+#' @param fitted_model A Stan fitted model (the result of rstan::sampling)
+#' @param exposures A vector of length N containing the exposures
+#' @param X The design matrix of rating variables
+#'
+#' @return A list containing matrices/vectors of posterior samples of the 
+#` required probability distributions.
+#' @export
+#'
+#' @examples 
+#` \dontrun{
+#` extract_and_get_posterior_samples(
+#` my_stan_fitted,
+#` vehicle_exposure_years,
+#` X_design
+#` )
+#`}
 extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 	
 	samples <- rstan::extract(fitted_model)
@@ -102,12 +128,24 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 		),
 	severity_samples = exp(
 		samples$beta_severity %*% t(as.matrix.data.frame(X))
+		),
+	dispersion_frequency_samples = ifelse(
+		is.null(samples$dispersion_frequency), NULL, samples$dispersion_frequency
+		),
+	dispersion_severity_samples = ifelse(
+		is.null(samples$dispersion_severity), NULL, samples$dispersion_severity
 		)
 	)
 }
+
+pg_posterior_samples <- extract_and_get_posterior_samples(
+	fitted_model = fit_poisson_gamma,
+	exposures = data$vehicle_exposure_years,
+	X = X
+)
 ```
 
-## Posterior Predictive Check- Frequency
+## Posterior Predictive Checks - Frequency
 
 ```{r}
 

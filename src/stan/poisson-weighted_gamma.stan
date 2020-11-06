@@ -11,7 +11,6 @@ parameters {
 	vector[Nvar] beta_frequency;
   vector[Nvar] beta_severity;
   real<lower=0> dispersion_severity;
-  real<lower=0> dispersion_frequency;
 }
 
 transformed parameters {
@@ -23,9 +22,8 @@ model {
   beta_frequency ~ normal(0, 5);
   beta_severity ~ normal(0, 5);
   dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 8);
   
-  claim_count ~ neg_binomial_2_log(X * beta_frequency + log(exposure), dispersion_frequency);
+  claim_count ~ poisson_log(X * beta_frequency + log(exposure));
   
   for (i in 1:Nobs) {
     if (claim_count[i] != 0) {
