@@ -87,14 +87,6 @@ frequency_samples_rates <- exp(samples$beta_frequency %*% t(as.matrix.data.frame
 severity_samples <- exp(samples$beta_severity %*% t(as.matrix.data.frame(X)))
 ```
 
-## Get average pure premiums
-
-```{r}
-
-predicted_severity <- severity_logistic_hurdle * severity_samples
-predicted_pure_premium <- frequency_samples_rates * predicted_severity
-```
-
 ## Posterior Predictive Check- Frequency
 
 ```{r}
@@ -149,6 +141,7 @@ ggplot(claims_tibble, aes(x = claim)) +
 	geom_density(data = data, aes(x = claim_count), size = 1)
 
 ```
+
 I tried a Poisson, but there were large issues with the variability for larger claim counts where uncertainty was not represented well enough (the data did not look probable). This strongly suggests a negative binomial.
 
 The graph above displays the negative binomial model which looks to represent the uncertainty for larger claim counts way better.
@@ -187,12 +180,13 @@ ggplot(severity_tibble, aes(x = severity)) +
 	geom_density(data = data, aes(x = severity), size = 1)
 
 ```
+
 Severity seems a bit off. Looks like the gamma distribution might not be right skewed enough.
 
 ## Posterior Predictive Check Pure Premium 
 ```{r}
 
-pp_tibble <- as_tibble(simulate_pp[1:1500, ]) %>%
+pp_tibble <- as_tibble(simulate_pp[1:4000, ]) %>%
 	mutate(iter = 1:nrow(.)) %>%
 	gather(key = "obs", value = "pp", -iter) %>%
 	select(-obs)
@@ -204,6 +198,7 @@ ggplot(pp_tibble, aes(x = pp)) +
 	scale_x_continuous(trans = "sqrt")
 
 ```
+
 Looks exceptionally good!
 
 ## Calculating Relativities
