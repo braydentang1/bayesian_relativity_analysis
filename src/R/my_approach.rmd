@@ -68,7 +68,7 @@ fit <- sampling(
 	verbose = TRUE
 	)
 
-saveRDS(fit, "bayes-nb.rds")
+saveRDS(fit, "../../results/bayes-nb.rds")
 
 ```
 ```{r}
