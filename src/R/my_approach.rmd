@@ -163,6 +163,7 @@ dispersion_severity <- matrix(
 
 shapes <- claim_count_pp / dispersion_severity
 rates <- claim_count_pp / (severity_samples * dispersion_severity)
+
 set.seed(200350623)
 simulate_severity <- rgamma(n = length(severity_samples), shape = shapes, rate = rates)
 dim(simulate_severity) <- dim(shapes)
@@ -232,7 +233,8 @@ km_relativities <- as_tibble(km_rels) %>%
 	summarize(
 		lower_90 = quantile(relativity, 0.05),
 		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity))
+		median = median(relativity)
+		)
 
 zone_relativities <- as_tibble(zone_rels) %>%
 	gather(key = "zone", value = "relativity") %>%
@@ -240,7 +242,8 @@ zone_relativities <- as_tibble(zone_rels) %>%
 	summarize(
 		lower_90 = quantile(relativity, 0.05),
 		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity))
+		median = median(relativity)
+		)
 
 bonus_relativities <- as_tibble(bonus_rels) %>%
 	gather(key = "bonus", value = "relativity") %>%
@@ -248,7 +251,8 @@ bonus_relativities <- as_tibble(bonus_rels) %>%
 	summarize(
 		lower_90 = quantile(relativity, 0.05),
 		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity))
+		median = median(relativity)
+		)
 
 make_relativities <- as_tibble(make_rels) %>%
 	gather(key = "make", value = "relativity") %>%
@@ -256,7 +260,8 @@ make_relativities <- as_tibble(make_rels) %>%
 	summarize(
 		lower_90 = quantile(relativity, 0.05),
 		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity))
+		median = median(relativity)
+		)
 
 km_relativities
 zone_relativities
