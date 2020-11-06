@@ -1,0 +1,267 @@
+---
+title: "A Fully Bayesian Approach to Relativity Analysis"
+author: "Brayden Tang"
+date: "02/11/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rstan)
+library(tidyverse)
+library(recipes)
+library(bayesplot)
+```
+
+## Read in data
+
+```{r Read in Data}
+
+data <- read_csv("../../data/motorins.csv") %>%
+	mutate(severity = ifelse(claim_count != 0, claim_payments / claim_count, 0)) %>%
+	mutate(
+		kilometres = as.factor(kilometres),
+		zone = as.factor(zone),
+		bonus = as.factor(bonus),
+		make = as.factor(make),
+		observed_pp = claim_payments / vehicle_exposure_years
+	)
+
+
+```
+
+## Model
+
+```{r Preprocess}
+
+preprocessing <- recipe(claim_count ~ ., data = data) %>%
+	step_dummy(all_nominal())
+
+prepped_recipe <- prep(preprocessing, training = data)
+
+X <- juice(prepped_recipe) %>%
+	mutate(intercept = rep(1, nrow(.))) %>%
+	relocate(intercept) %>%
+	select(-vehicle_exposure_years, -claim_payments, -severity, -claim_count, -observed_pp) 
+
+data_list <- list(
+	Nobs = nrow(data),
+	Nvar = ncol(X),
+	X = as.matrix.data.frame(X),
+	claim_count = data$claim_count,
+	exposure = data$vehicle_exposure_years,
+	severity = data$severity
+)
+
+```
+
+```{r Stan}
+
+sm <- stan_model(file = "../stan/bayes-model.stan")
+fit <- sampling(
+	sm,
+	data = data_list,
+	chains = 6,
+	iter = 5000,
+	seed = 200350623,
+	cores = 6,
+	verbose = TRUE
+	)
+
+saveRDS(fit, "bayes-nb.rds")
+
+```
+```{r}
+
+samples <- rstan::extract(fit)
+exposure <- matrix(
+	log(data$vehicle_exposure_years),
+	nrow = nrow(samples$beta_frequency),
+	ncol = nrow(data),
+	byrow = TRUE
+	)
+
+frequency_samples <- exp(samples$beta_frequency %*% t(as.matrix.data.frame(X)) + exposure)
+frequency_samples_rates <- exp(samples$beta_frequency %*% t(as.matrix.data.frame(X)))
+
+severity_samples <- exp(samples$beta_severity %*% t(as.matrix.data.frame(X)))
+```
+
+## Get average pure premiums
+
+```{r}
+
+predicted_severity <- severity_logistic_hurdle * severity_samples
+predicted_pure_premium <- frequency_samples_rates * predicted_severity
+```
+
+## Posterior Predictive Check- Frequency
+
+```{r}
+
+# Basically, flatten the matrix of frequencies to a vector, generate a vector of length equal to this vector using each of these frequencies, then convert back
+dispersion_frequency <- matrix(
+	samples$dispersion_frequency,
+	nrow = length(samples$dispersion_frequency),
+	ncol = nrow(data)
+	)
+
+set.seed(200350623)
+claim_count_pp <- rnbinom(
+	n = length(frequency_samples),
+	size = dispersion_frequency,
+	mu = frequency_samples
+	)
+
+dim(claim_count_pp) <- dim(frequency_samples)
+
+graphing <- tibble(
+	lower = apply(claim_count_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
+	upper = apply(claim_count_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.95)),
+	actual = data$claim_count,
+	kilometre = data$kilometres,
+	bonus = data$bonus,
+	zone = data$zone,
+	make = data$make
+	) %>%
+	mutate(within = ifelse(actual <= upper & actual >= lower, 1, 0))
+
+```
+
+Check that at least 90% of the intervals contain the observed. 
+
+```{r}
+mean(graphing$within)
+```
+Looks really good, even better than 90%.
+
+```{r}
+
+claims_tibble <- as_tibble(claim_count_pp[1:1000, ]) %>%
+	mutate(iter = 1:nrow(.)) %>%
+	gather(key = "obs", value = "claim", -iter) %>%
+	select(-obs)
+
+ggplot(claims_tibble, aes(x = claim)) +
+	geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
+	theme_bw() +
+	scale_x_continuous(trans = "sqrt") +
+	geom_density(data = data, aes(x = claim_count), size = 1)
+
+```
+I tried a Poisson, but there were large issues with the variability for larger claim counts where uncertainty was not represented well enough (the data did not look probable). This strongly suggests a negative binomial.
+
+The graph above displays the negative binomial model which looks to represent the uncertainty for larger claim counts way better.
+
+```{r}
+
+dispersion_severity <- matrix(
+	samples$dispersion_severity,
+	nrow = length(samples$dispersion_severity),
+	ncol = nrow(data)
+)
+
+shapes <- claim_count_pp / dispersion_severity
+rates <- claim_count_pp / (severity_samples * dispersion_severity)
+set.seed(200350623)
+simulate_severity <- rgamma(n = length(severity_samples), shape = shapes, rate = rates)
+dim(simulate_severity) <- dim(shapes)
+
+simulate_pp <- (claim_count_pp / exp(exposure)) * simulate_severity
+
+```
+
+## Posterior Predictive Check For Severity
+
+```{r}
+
+severity_tibble <- as_tibble(simulate_severity[1:1000, ]) %>%
+	mutate(iter = 1:nrow(.)) %>%
+	gather(key = "obs", value = "severity", -iter) %>%
+	select(-obs)
+
+ggplot(severity_tibble, aes(x = severity)) +
+	geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
+	theme_bw() +
+	geom_density(data = data, aes(x = severity), size = 1)
+
+```
+Severity seems a bit off. Looks like the gamma distribution might not be right skewed enough.
+
+## Posterior Predictive Check Pure Premium 
+```{r}
+
+pp_tibble <- as_tibble(simulate_pp[1:1500, ]) %>%
+	mutate(iter = 1:nrow(.)) %>%
+	gather(key = "obs", value = "pp", -iter) %>%
+	select(-obs)
+
+ggplot(pp_tibble, aes(x = pp)) +
+	geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
+	theme_bw() +
+	geom_density(data = data, aes(x = observed_pp), color = "black") +
+	scale_x_continuous(trans = "sqrt")
+
+```
+Looks exceptionally good!
+
+## Calculating Relativities
+
+We now calculate the required relativities. We set the base class as 1, 4, 7, 9 for kilometers, zone, bonus, and make since it has the highest number of exposures.
+
+```{r}
+
+# 1, 4, 7, 9 has h
+
+km_only <- simulate_pp[, which(data$zone == 4 & data$bonus == 7 & data$make == 9)]
+zone_only <- simulate_pp[, which(data$kilometres == 1 & data$bonus == 7 & data$make == 9)]
+bonus_only <- simulate_pp[, which(data$kilometres == 1 & data$zone == 4 & data$make == 9)]
+make_only <- simulate_pp[, which(data$kilometres == 1 & data$zone == 4 & data$bonus == 7)]
+
+km_rels <- apply(km_only, MARGIN = 2, FUN = function(x) x / km_only[, 1])
+zone_rels <- apply(zone_only, MARGIN = 2, FUN = function(x) x / zone_only[, 4])
+bonus_rels <- apply(bonus_only, MARGIN = 2, FUN = function(x) x / bonus_only[, 7])
+make_rels <- apply(make_only, MARGIN = 2, FUN = function(x) x / make_only[, 9])
+```
+
+```{r}
+
+km_relativities <- as_tibble(km_rels) %>%
+	gather(key = "kilometre", value = "relativity") %>%
+	group_by(kilometre) %>%
+	summarize(
+		lower_90 = quantile(relativity, 0.05),
+		upper_90 = quantile(relativity, 0.95),
+		median = median(relativity))
+
+zone_relativities <- as_tibble(zone_rels) %>%
+	gather(key = "zone", value = "relativity") %>%
+	group_by(zone) %>%
+	summarize(
+		lower_90 = quantile(relativity, 0.05),
+		upper_90 = quantile(relativity, 0.95),
+		median = median(relativity))
+
+bonus_relativities <- as_tibble(bonus_rels) %>%
+	gather(key = "bonus", value = "relativity") %>%
+	group_by(bonus) %>%
+	summarize(
+		lower_90 = quantile(relativity, 0.05),
+		upper_90 = quantile(relativity, 0.95),
+		median = median(relativity))
+
+make_relativities <- as_tibble(make_rels) %>%
+	gather(key = "make", value = "relativity") %>%
+	group_by(make) %>%
+	summarize(
+		lower_90 = quantile(relativity, 0.05),
+		upper_90 = quantile(relativity, 0.95),
+		median = median(relativity))
+
+km_relativities
+zone_relativities
+bonus_relativities
+make_relativities
+
+```
+
