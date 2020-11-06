@@ -13,7 +13,9 @@ library(recipes)
 library(bayesplot)
 ```
 
-## Read in data
+## Import Data
+
+Import the data and convert the rating variables to factors.
 
 ```{r Read in Data}
 
@@ -27,10 +29,11 @@ data <- read_csv("../../data/motorins.csv") %>%
 		observed_pp = claim_payments / vehicle_exposure_years
 	)
 
-
 ```
 
-## Model
+## Preprocessing
+
+Basically, create a design matrix where the rating variables are one hot encoded.
 
 ```{r Preprocess}
 
@@ -44,6 +47,7 @@ X <- juice(prepped_recipe) %>%
 	relocate(intercept) %>%
 	select(-vehicle_exposure_years, -claim_payments, -severity, -claim_count, -observed_pp) 
 
+# This is the data_list passed to Stan.
 data_list <- list(
 	Nobs = nrow(data),
 	Nvar = ncol(X),
@@ -55,11 +59,17 @@ data_list <- list(
 
 ```
 
-```{r Stan}
+## Fit the Bayesian Models in Stan
 
-sm <- stan_model(file = "../stan/bayes-model.stan")
-fit <- sampling(
-	sm,
+### Poisson Frequency, Weighted Gamma Severity
+
+Compile, and then save the model to a serialized R file.
+
+```{r Stan - Poisson Gamma Fit}
+
+sm_poisson_gamma <- stan_model(file = "../stan/poisson-weighted_gamma.stan")
+fit_poisson_gamma <- sampling(
+	sm_poisson_gamma,
 	data = data_list,
 	chains = 6,
 	iter = 5000,
@@ -68,23 +78,33 @@ fit <- sampling(
 	verbose = TRUE
 	)
 
-saveRDS(fit, "../../results/bayes-nb.rds")
+saveRDS(fit_poisson_gamma, "../../results/poisson-weighted_gamma.rds")
 
 ```
+
+Extract the samples, and calculate parameters required to simulate from the
+posterior predictive distributions for both the Poisson and weighted gamma.
+
 ```{r}
-
-samples <- rstan::extract(fit)
-exposure <- matrix(
-	log(data$vehicle_exposure_years),
-	nrow = nrow(samples$beta_frequency),
-	ncol = nrow(data),
-	byrow = TRUE
+extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
+	
+	samples <- rstan::extract(fitted_model)
+	exposure <- matrix(
+		log(exposures),
+		nrow = nrow(samples$beta_frequency),
+		ncol = length(exposures),
+		byrow = TRUE
+		)
+	
+	list(
+		frequency_samples = exp(
+		samples$beta_frequency %*% t(as.matrix.data.frame(X)) + exposure
+		),
+	severity_samples = exp(
+		samples$beta_severity %*% t(as.matrix.data.frame(X))
+		)
 	)
-
-frequency_samples <- exp(samples$beta_frequency %*% t(as.matrix.data.frame(X)) + exposure)
-frequency_samples_rates <- exp(samples$beta_frequency %*% t(as.matrix.data.frame(X)))
-
-severity_samples <- exp(samples$beta_severity %*% t(as.matrix.data.frame(X)))
+}
 ```
 
 ## Posterior Predictive Check- Frequency
@@ -264,4 +284,4 @@ bonus_relativities
 make_relativities
 
 ```
-
+Note that in this case, a relativity of 1 means that there is no difference in risk between a particular rate level and the base class. If lower_90 = upper_90 = median, than this is the base class which by definition is 1.00.
