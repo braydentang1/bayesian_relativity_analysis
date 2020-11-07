@@ -8,7 +8,7 @@ data {
 }
 
 parameters {
-	vector[Nvar] beta_frequency;
+  vector[Nvar] beta_frequency;
   vector[Nvar] beta_severity;
   real<lower=0> dispersion_severity;
 }
