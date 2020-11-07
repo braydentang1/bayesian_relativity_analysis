@@ -338,8 +338,9 @@ overall the distribution does not right skewed enough.
 ## Posterior Predictive Check Pure Premium 
 ```{r}
 
-simulate_pure_premium <- (claim_count_posterior_pred /
-									exp(pg_posterior_samples$exposures)) * simulate_severity
+simulate_pure_premium <- (
+	claim_count_posterior_pred / exp(pg_posterior_samples$exposures)
+	) * simulate_severity
 
 posterior_pred_check(
 	simulate_pure_premium,
@@ -462,8 +463,9 @@ Finally, calculate pure premiums and then conduct a posterior predictive check.
 
 ```{r}
 
-simulate_pure_premium_nb <- (claim_count_posterior_pred_nb /
-									exp(nb_posterior_samples$exposures)) * simulate_severity_nb
+simulate_pure_premium_nb <- (
+	claim_count_posterior_pred_nb / exp(nb_posterior_samples$exposures)
+	) * simulate_severity_nb
 
 posterior_pred_check(
 	simulate_pure_premium_nb,
