@@ -10,7 +10,6 @@ knitr::opts_chunk$set(echo = TRUE)
 library(rstan)
 library(tidyverse)
 library(recipes)
-library(bayesplot)
 ```
 
 ## Import Data
@@ -88,7 +87,6 @@ fit_poisson_gamma <- sampling(
 saveRDS(fit_poisson_gamma, "../../results/poisson-weighted_gamma.rds")
 
 ```
-
 Extract the samples, and calculate parameters required to simulate from the
 posterior predictive distributions for both the Poisson and weighted gamma.
 
@@ -96,7 +94,10 @@ posterior predictive distributions for both the Poisson and weighted gamma.
 #' Extract the required mean/dispersion parameters for both candidate frequency
 #` and severity distributions.
 #'
-#' @param fitted_model A Stan fitted model (the result of rstan::sampling)
+#' @param fitted_model A Stan fitted model (the result of rstan::sampling).
+#`	This model MUST have named parameters beta_frequency, beta_severity, 
+#`	and can optionally have parameters dispersion_frequency and 
+#`  dispersion_severity.
 #' @param exposures A vector of length N containing the exposures
 #' @param X The design matrix of rating variables
 #'
@@ -122,6 +123,18 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 		byrow = TRUE
 		)
 	
+	if (is.null(samples$dispersion_frequency)) {
+		dispersion_frequency_samples <- NULL
+	} else {
+		dispersion_frequency_samples <- samples$dispersion_frequency
+	}
+	
+	if (is.null(samples$dispersion_severity)) {
+		dispersion_severity_samples <- NULL
+	} else {
+		dispersion_severity_samples <- samples$dispersion_severity
+	}
+	
 	list(
 		frequency_samples = exp(
 		samples$beta_frequency %*% t(as.matrix.data.frame(X)) + exposure
@@ -129,15 +142,14 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 	severity_samples = exp(
 		samples$beta_severity %*% t(as.matrix.data.frame(X))
 		),
-	dispersion_frequency_samples = ifelse(
-		is.null(samples$dispersion_frequency), NULL, samples$dispersion_frequency
-		),
-	dispersion_severity_samples = ifelse(
-		is.null(samples$dispersion_severity), NULL, samples$dispersion_severity
-		)
+	dispersion_frequency_samples = dispersion_frequency_samples,
+	dispersion_severity_samples = dispersion_severity_samples,
+	exposures = exposure
 	)
+	
 }
 
+# Extract the samples for the Poisson-Gamma model.
 pg_posterior_samples <- extract_and_get_posterior_samples(
 	fitted_model = fit_poisson_gamma,
 	exposures = data$vehicle_exposure_years,
@@ -149,77 +161,161 @@ pg_posterior_samples <- extract_and_get_posterior_samples(
 
 ```{r}
 
-# Basically, flatten the matrix of frequencies to a vector, generate a vector of length equal to this vector using each of these frequencies, then convert back
-dispersion_frequency <- matrix(
-	samples$dispersion_frequency,
-	nrow = length(samples$dispersion_frequency),
-	ncol = nrow(data)
-	)
-
+# Basically, flatten the matrix of frequencies to a vector, generate a vector 
+# of length equal to this vector using each of these frequencies, then convert
+# back
 set.seed(200350623)
-claim_count_pp <- rnbinom(
-	n = length(frequency_samples),
-	size = dispersion_frequency,
-	mu = frequency_samples
+claim_count_posterior_pred <- rpois(
+	n = length(pg_posterior_samples$frequency_samples),
+	lambda = pg_posterior_samples$frequency_samples
 	)
 
-dim(claim_count_pp) <- dim(frequency_samples)
-
-graphing <- tibble(
-	lower = apply(claim_count_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
-	upper = apply(claim_count_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.95)),
-	actual = data$claim_count,
-	kilometre = data$kilometres,
-	bonus = data$bonus,
-	zone = data$zone,
-	make = data$make
-	) %>%
-	mutate(within = ifelse(actual <= upper & actual >= lower, 1, 0))
-
+dim(claim_count_posterior_pred) <- dim(pg_posterior_samples$frequency_samples)
 ```
 
 Check that at least 90% of the intervals contain the observed. 
 
 ```{r}
-mean(graphing$within)
+
+#' Calculates the coverage of a credible interval for a given probability.
+#'
+#' @param samples Posterior predictive samples of y from the Bayesian model 
+#' @param y Vector of actual observed data.
+#' @param prob Probability of prob% credible interval. Must be between 0 and 1.
+#'
+#' @return The coverage level.
+#' @export
+#'
+#' @examples interval_checker(posterior_samples, y, 0.90)
+interval_checker <- function(samples, y, prob) {
+	
+	if (ncol(samples) != length(y)) {
+		stop("Number of columns of samples must equal length of y.")
+	} else if (prob <= 0 || prob >= 1) {
+		stop("prob must be greater than 0 and less than 1.")
+	}
+	
+	probability <- (1 + prob) / 2
+	
+	info <- tibble(
+	lower = apply(
+		samples, MARGIN = 2, FUN = function(x) quantile(x, 1 - probability)
+		),
+	upper = apply(
+		samples, MARGIN = 2, FUN = function(x) quantile(x, probability)
+		),
+	actual = y
+	) %>%
+	mutate(within = ifelse(actual <= upper & actual >= lower, 1, 0))
+	
+	mean(info$within)
+}
+
+interval_checker(claim_count_posterior_pred, y = data$claim_count, prob = 0.90)
 ```
-Looks really good, even better than 90%.
+It does.
+
+### Graph of claim count repetitions vs actual observed counts
 
 ```{r}
 
-claims_tibble <- as_tibble(claim_count_pp[1:1000, ]) %>%
-	mutate(iter = 1:nrow(.)) %>%
-	gather(key = "obs", value = "claim", -iter) %>%
-	select(-obs)
+#' Generates posterior parameter samples for the weighted gamma.
+#'
+#' @param posterior_predictive_samples Matrix of posterior predictive samples.
+#' @param y Vector of observations representing the actuals.
+#' @param n Number of samples to plot. Must be less than the number of rows in
+#'	posterior_predictive_samples.
+#' @param variable Character string for graphing purposes.
+#'
+#' @return None.
+#' @export
+#'
+#' @examples
+#' posterior_predictive_check(
+#`	my_posterior_samples, n = 1000, variable = "claims"
+#` )
+posterior_pred_check <- function(posterior_predictive_samples, y, n, variable) {
 
-ggplot(claims_tibble, aes(x = claim)) +
-	geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
-	theme_bw() +
-	scale_x_continuous(trans = "sqrt") +
-	geom_density(data = data, aes(x = claim_count), size = 1)
+	data_tibble <- as_tibble(posterior_predictive_samples[1:n, ]) %>%
+		mutate(iter = 1:nrow(.)) %>%
+		gather(key = "obs", value = "var", -iter) %>%
+		select(-obs)
+	
+	ggplot(data_tibble, aes(x = var)) +
+		geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
+		theme_bw() +
+		scale_x_continuous(trans = "sqrt") +
+		geom_density(data = tibble(actual = y), aes(x = actual), size = 1) +
+		labs(x = variable)
+
+}
+
+posterior_pred_check(
+	claim_count_posterior_pred,
+	y = data$claim_count,
+	n = 1000,
+	"claims"
+	)
 
 ```
 
-I tried a Poisson, but there were large issues with the variability for larger claim counts where uncertainty was not represented well enough (the data did not look probable). This strongly suggests a negative binomial.
+There looks to be issues with the variability for larger claim counts where
+uncertainty is not represented well enough. The bands for larger claim counts
+should be larger. This strongly suggests a negative binomial.
 
-The graph above displays the negative binomial model which looks to represent the uncertainty for larger claim counts way better.
+A negative binomial is likely to result in a better fit. 
+
+## Posterior Predictive Check - Severity
 
 ```{r}
 
-dispersion_severity <- matrix(
-	samples$dispersion_severity,
-	nrow = length(samples$dispersion_severity),
-	ncol = nrow(data)
+#' Computes the posterior parameters for the weighted Gamma distribution.
+#'
+#' @param posterior_samples Posterior parameter samples from the Stan model.
+#' @param posterior_predictive_claim_counts Posterior predictive claim counts.
+#'  Must be a matrix.
+#'
+#' @return A list with posterior shape and rate parameters.
+#' @export
+#'
+#' @examples sample_weighted_gamma(
+#' posterior_samples, claim_counts_nb)
+#'
+#'
+#'
+sample_weighted_gamma <- function(
+	posterior_samples,
+	posterior_predictive_claim_counts) {
+	
+	dispersion_severity_posterior <- matrix(
+		posterior_samples$dispersion_severity_samples,
+		nrow = nrow(posterior_samples$frequency_samples),
+		ncol = ncol(posterior_samples$frequency_samples)
+		)
+	
+	shapes_posterior <- posterior_predictive_claim_counts / 
+		dispersion_severity_posterior
+	
+	rates_posterior <- posterior_predictive_claim_counts /
+		(posterior_samples$severity_samples * dispersion_severity_posterior)
+	
+	list(shapes = shapes_posterior, rates = rates_posterior)
+	
+	}
+
+posterior_sev_samples_pg <- sample_weighted_gamma(
+	pg_posterior_samples,
+	claim_count_posterior_pred	
 )
 
-shapes <- claim_count_pp / dispersion_severity
-rates <- claim_count_pp / (severity_samples * dispersion_severity)
-
 set.seed(200350623)
-simulate_severity <- rgamma(n = length(severity_samples), shape = shapes, rate = rates)
-dim(simulate_severity) <- dim(shapes)
+simulate_severity <- rgamma(
+	n = length(pg_posterior_samples$severity_samples),
+	shape = posterior_sev_samples_pg$shapes,
+	rate = posterior_sev_samples_pg$rates
+	)
 
-simulate_pp <- (claim_count_pp / exp(exposure)) * simulate_severity
+dim(simulate_severity) <- dim(pg_posterior_samples$severity_samples)
 
 ```
 
@@ -227,99 +323,254 @@ simulate_pp <- (claim_count_pp / exp(exposure)) * simulate_severity
 
 ```{r}
 
-severity_tibble <- as_tibble(simulate_severity[1:1000, ]) %>%
-	mutate(iter = 1:nrow(.)) %>%
-	gather(key = "obs", value = "severity", -iter) %>%
-	select(-obs)
-
-ggplot(severity_tibble, aes(x = severity)) +
-	geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
-	theme_bw() +
-	geom_density(data = data, aes(x = severity), size = 1)
+posterior_pred_check(
+	simulate_severity,
+	y = data$severity,
+	n = 1000,
+	variable = "severity"
+	)
 
 ```
 
-Severity seems a bit off. Looks like the gamma distribution might not be right skewed enough.
+Severity seems off. This could be the result of a poor claims fit, however, but
+overall the distribution does not right skewed enough.
 
 ## Posterior Predictive Check Pure Premium 
 ```{r}
 
-pp_tibble <- as_tibble(simulate_pp[1:4000, ]) %>%
-	mutate(iter = 1:nrow(.)) %>%
-	gather(key = "obs", value = "pp", -iter) %>%
-	select(-obs)
+simulate_pure_premium <- (claim_count_posterior_pred /
+									exp(pg_posterior_samples$exposures)) * simulate_severity
 
-ggplot(pp_tibble, aes(x = pp)) +
-	geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
-	theme_bw() +
-	geom_density(data = data, aes(x = observed_pp), color = "black") +
-	scale_x_continuous(trans = "sqrt")
+posterior_pred_check(
+	simulate_pure_premium,
+	y = data$observed_pp,
+	n = 1000,
+	variable = "pure premium"
+)
+```
+
+Looks not too bad, but the dip for low pure premiums and the spike don't look
+probable enough from the 1000 simulations.
+
+## Model Revised
+
+There's strong evidence to suggest a negative binomial model. Let's fit this and
+carry out the same process as above.
+
+```{r}
+
+sm_nb_gamma <- stan_model(file = "../stan/nb-weighted_gamma.stan")
+fit_nb_gamma <- sampling(
+	sm_nb_gamma,
+	data = data_list,
+	chains = 6,
+	iter = 5000,
+	seed = 200350623,
+	cores = 6,
+	verbose = TRUE
+	)
+
+saveRDS(fit_nb_gamma, "../../results/nb-weighted_gamma.rds")
+```
+Extracting the posterior samples.
+
+```{r}
+
+nb_posterior_samples <- extract_and_get_posterior_samples(
+	fit_nb_gamma,
+	exposures = data$vehicle_exposure_years,
+	X = X 
+	)
+
+dispersion_frequency_nb <- matrix(
+	nb_posterior_samples$dispersion_frequency,
+	nrow = length(nb_posterior_samples$dispersion_frequency),
+	ncol = nrow(data)
+)
+```
+
+Simulate the claims from the posterior predictive.
+
+```{r}
+set.seed(200350623)
+claim_count_posterior_pred_nb <- rnbinom(
+	n = length(nb_posterior_samples$frequency_samples),
+	mu = nb_posterior_samples$frequency_samples,
+	size = dispersion_frequency_nb
+	)
+
+dim(claim_count_posterior_pred_nb) <- dim(dispersion_frequency_nb)
+```
+
+Posterior Predictive Check on Frequency:
+
+```{r}
+
+interval_checker(
+	samples = claim_count_posterior_pred_nb, 
+	y = data$claim_count,
+	prob = 0.90 
+)
+
+posterior_pred_check(
+	claim_count_posterior_pred_nb,
+	y = data$claim_count,
+	n = 1000,
+	variable = "claims"
+	)
+
+```
+Better coverage and looks to model higher claim counts better in terms of
+uncertainty.
+
+For severity, generate the posterior predictive samples.
+
+```{r}
+
+parameters_nb <- sample_weighted_gamma(
+	posterior_samples = nb_posterior_samples,
+	posterior_predictive_claim_counts = claim_count_posterior_pred_nb
+)
+
+set.seed(200350623)
+simulate_severity_nb <- rgamma(
+	n = length(parameters_nb$shapes),
+	shape = parameters_nb$shapes,
+	rate = parameters_nb$rates
+	)
+
+dim(simulate_severity_nb) <- dim(nb_posterior_samples$severity_samples)
 
 ```
 
-Looks exceptionally good!
+Now, conduct a posterior predictive check for severity.
+
+```{r}
+
+posterior_pred_check(
+	simulate_severity_nb,
+	y = data$severity,
+	n = 1000,
+	variable = "severity"
+)
+
+```
+Looks to be just as bad as the Poisson one. Not too surprising since the
+frequency distributions looked very similar.
+
+Finally, calculate pure premiums and then conduct a posterior predictive check.
+
+```{r}
+
+simulate_pure_premium_nb <- (claim_count_posterior_pred_nb /
+									exp(nb_posterior_samples$exposures)) * simulate_severity_nb
+
+posterior_pred_check(
+	simulate_pure_premium_nb,
+	y = data$observed_pp,
+	n = 1000,
+	variable = "pure premium"
+)
+
+```
+
+Looks to be slightly better. Namely, the peak of the density looks to be more 
+plausible in this negative binomial model, mostly since the negative binomial
+induces more variation.
 
 ## Calculating Relativities
 
-We now calculate the required relativities. We set the base class as 1, 4, 7, 9 for kilometers, zone, bonus, and make since it has the highest number of exposures.
+We now calculate the required relativities. We set the base class as 1, 4, 7, 9
+for kilometers, zone, bonus, and make since it has the highest number of
+exposures.
 
 ```{r}
 
-# 1, 4, 7, 9 has h
+#' Calculate posterior predictive relativities.
+#'
+#' @param pure_premium_simulations Matrix of pure premium simulations 
+#' @param base_class The base class (ex: 1, 4, 7, 9). Vector must be of length 4.
+#'
+#' @return A list of relativities for each rating vaariable
+#' @export
+#'
+#' @examples 
+#' calculate_relativities(pure_premium_posterior_predictive, c(1, 4, 7, 9))
+#'
+calculate_relativities <- function(pure_premium_simulations, base_class) {
 
-km_only <- simulate_pp[, which(data$zone == 4 & data$bonus == 7 & data$make == 9)]
-zone_only <- simulate_pp[, which(data$kilometres == 1 & data$bonus == 7 & data$make == 9)]
-bonus_only <- simulate_pp[, which(data$kilometres == 1 & data$zone == 4 & data$make == 9)]
-make_only <- simulate_pp[, which(data$kilometres == 1 & data$zone == 4 & data$bonus == 7)]
+	base_km <- base_class[1]
+	base_zone <- base_class[2]
+	base_bonus <- base_class[3]
+	base_make <- base_class[4]
+	
+	km_only <- pure_premium_simulations[, which(
+		data$zone == base_zone & data$bonus == base_bonus & data$make == base_make
+		)]
+	
+	zone_only <- pure_premium_simulations[, which(
+		data$kilometres == base_km & data$bonus == base_bonus & data$make == base_make
+		)]
+	
+	bonus_only <- pure_premium_simulations[, which(
+		data$kilometres == base_km & data$zone == base_zone & data$make == base_make
+		)]
+	
+	make_only <- pure_premium_simulations[, which(
+		data$kilometres == base_km & data$zone == base_zone & data$bonus == base_bonus
+		)]
 
-km_rels <- apply(km_only, MARGIN = 2, FUN = function(x) x / km_only[, 1])
-zone_rels <- apply(zone_only, MARGIN = 2, FUN = function(x) x / zone_only[, 4])
-bonus_rels <- apply(bonus_only, MARGIN = 2, FUN = function(x) x / bonus_only[, 7])
-make_rels <- apply(make_only, MARGIN = 2, FUN = function(x) x / make_only[, 9])
+	list(
+		km_rels = apply(
+			km_only, MARGIN = 2, FUN = function(x) x / km_only[, base_km]
+			),
+		zone_rels = apply(
+			zone_only, MARGIN = 2, FUN = function(x) x / zone_only[, base_zone]
+			),
+		bonus_rels = apply(
+			bonus_only, MARGIN = 2, FUN = function(x) x / bonus_only[, base_bonus]
+			),
+		make_rels = apply(
+			make_only, MARGIN = 2, FUN = function(x) x / make_only[, base_make]
+			)
+	)
+}
 ```
 
 ```{r}
 
-km_relativities <- as_tibble(km_rels) %>%
-	gather(key = "kilometre", value = "relativity") %>%
-	group_by(kilometre) %>%
-	summarize(
-		lower_90 = quantile(relativity, 0.05),
-		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity)
-		)
+#' Calculates the credible intervals for pure premiums.
+#'
+#' @param df A matrix of relativities.
+#' @param prob Number between 0 and 1 representing the credible interval coverage.
+#'
+#' @return A tibble of relativities and 90% credible intervals.
+#' @export
+#'
+#' @examples get_relativity_with_ci(km_df)
+get_relativity_with_ci <- function(df, prob = 0.9) {
+	
+	df <- as_tibble(df) %>%
+		gather(key = "variable", value = "relativity") %>%
+		group_by(variable) %>%
+		summarize(
+			lower_90 = quantile(relativity, 0.05),
+			upper_90 = quantile(relativity, 0.95),
+			median = median(relativity)
+		) %>%
+		mutate(variable = 1:nrow(.))
+	
+}
 
-zone_relativities <- as_tibble(zone_rels) %>%
-	gather(key = "zone", value = "relativity") %>%
-	group_by(zone) %>%
-	summarize(
-		lower_90 = quantile(relativity, 0.05),
-		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity)
-		)
+relatvity_samples <- calculate_relativities(
+	simulate_pure_premium_nb,
+	c(1, 4, 7, 9)
+)
+rels <- lapply(relatvity_samples, FUN = get_relativity_with_ci)
 
-bonus_relativities <- as_tibble(bonus_rels) %>%
-	gather(key = "bonus", value = "relativity") %>%
-	group_by(bonus) %>%
-	summarize(
-		lower_90 = quantile(relativity, 0.05),
-		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity)
-		)
-
-make_relativities <- as_tibble(make_rels) %>%
-	gather(key = "make", value = "relativity") %>%
-	group_by(make) %>%
-	summarize(
-		lower_90 = quantile(relativity, 0.05),
-		upper_90 = quantile(relativity, 0.95),
-		median = median(relativity)
-		)
-
-km_relativities
-zone_relativities
-bonus_relativities
-make_relativities
-
+lapply(1:4, FUN = function(x) rels[[x]])
 ```
-Note that in this case, a relativity of 1 means that there is no difference in risk between a particular rate level and the base class. If lower_90 = upper_90 = median, than this is the base class which by definition is 1.00.
+Note that in this case, a relativity of 1 means that there is no difference in
+risk between a particular rate level and the base class. 
+If lower_90 = upper_90 = median, than this is the base class which by definition
+is 1.00.
