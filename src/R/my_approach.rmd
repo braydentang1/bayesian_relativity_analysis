@@ -366,12 +366,13 @@ fit_nb_gamma <- sampling(
 	data = data_list,
 	chains = 6,
 	iter = 5000,
+	control = list(adapt_delta = 0.95),
 	seed = 200350623,
 	cores = 6,
 	verbose = TRUE
 	)
 
-saveRDS(fit_nb_gamma, "../../results/nb-weighted_gamma.rds")
+saveRDS(fit_nb_gamma, "../../results/nb-weighted_gamma-elastic_net.rds")
 ```
 Extracting the posterior samples.
 
@@ -492,6 +493,7 @@ exposures.
 #'
 #' @param pure_premium_simulations Matrix of pure premium simulations 
 #' @param base_class The base class (ex: 1, 4, 7, 9). Vector must be of length 4.
+#'	The base class should be in the order of km, zone, bonus, and make.
 #'
 #' @return A list of relativities for each rating vaariable
 #' @export
