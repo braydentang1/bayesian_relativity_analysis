@@ -245,7 +245,7 @@ posterior_pred_check <- function(posterior_predictive_samples, y, n, variable) {
 		geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
 		theme_bw() +
 		scale_x_continuous(trans = "sqrt") +
-		geom_density(data = tibble(actual = y), aes(x = actual), size = 1) +
+		geom_density(data = tibble(actual = y), aes(x = actual), size = 0.5, alpha = 0.3) +
 		labs(x = variable)
 
 }
@@ -372,7 +372,7 @@ fit_nb_gamma <- sampling(
 	verbose = TRUE
 	)
 
-saveRDS(fit_nb_gamma, "../../results/nb-weighted_gamma-elastic_net.rds")
+saveRDS(fit_nb_gamma, "../../results/nb-weighted_gamma.rds")
 ```
 Extracting the posterior samples.
 
