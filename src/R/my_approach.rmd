@@ -18,7 +18,7 @@ Import the data and convert the rating variables to factors.
 
 ```{r Read in Data}
 
-data <- read_csv("../../data/motorins.csv") %>%
+data <- read_csv("../../data/pricingdat.csv") %>%
 	mutate(
 		severity = ifelse(claim_count != 0, claim_payments / claim_count, 0), 
 		kilometres = as.factor(kilometres),
