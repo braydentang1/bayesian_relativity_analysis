@@ -1,0 +1,111 @@
+---
+title: "A Fully Bayesian Way of Estimating Insurance Relativities"
+author: "Brayden Tang"
+date: "27/11/2020"
+output: html_document
+---
+
+## Some Context
+I am not an actuarial student (anymore) but I recently completed a typical
+pricing assignment as part of an evaluation for a job application.
+I didn't end up applying, however I enjoyed having a (fake) familiar kind
+of dataset that I used to work with all the time in my past life. I wanted to see
+if I could get around some of the issues I had with these kinds of datasets
+from three years ago.
+
+The objective of actuarial relativity analysis is, at a high level, to most 
+accurately predict pure premiums as closely as possible. The pure premium is 
+the amount of money needed, on average, that is required to cover the cost of
+claims only (so no profit allocations or expenses).
+
+Naturally, pure premium is expressed simply as the rate at which a risk
+makes any kind of claim multiplied by the average amount per each claim. Thus, pure premium
+is defined as frequency * severity = \frac{total claim counts}{total risks = exposures} * \frac{total claim amounts}{total claim counts}  = \frac{total claim amounts}{total risks}.
+
+We can model either the frequency and severity distributions separately, or we 
+can model pure premium directly. The former approach is often preferred as 
+it offers more flexibility and is at least logically, more robust. 
+
+## Relativities
+
+Relativities are simply the marginal impact a particular rating variable has on the
+response. This has the exact same interpretation as regression coefficients do
+in a multivariate linear model - holding all other variables constant, the regression
+coefficient represents the change in some quantity (say, the log of severity or
+the log of frequency) per some change in said rating variable. 
+
+Relativities are typically calculated by calculating pure premiums across one
+varying rating variable, where all of the other rating variables are held constant.
+Then, we divide each pure premium per each level in the varied rating variable
+by the base class premium to obtain relativities for this particular rating variable.
+
+## The Dataset
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(rstan)
+library(tidyverse)
+library(recipes)
+library(kableExtra)
+```
+
+I import the dataset below and show the first 10 rows:
+
+```{r Import the data}
+
+data <- read_csv("../data/pricingdat.csv") 
+
+head(data, n = 10) %>%
+	kable() %>%
+	kableExtra::kable_styling()
+
+```
+
+As is typical, one row represents one unique combination of rating variables, 
+containing the total number of claims observed, amount of exposures (i.e. number of risks,
+which is typically defined as the amount of policy earned over a period of one year) and
+the total amount of claim payments. 
+
+While this dataset seems straightforward, it is deceivingly difficult to work with when compared to 
+other more standard datasets. This is primarily due to the aggregation which causes rows and
+columns to be dependent. If we add more rating variables (which are columns) to the dataset, 
+we naturally will get more rows since there will be more unique combinations of rating variables. 
+In fact, the number of rows will grow exponentially (see the curse of dimensionality).
+
+Each row will naturally become more sparse as well, with some combinations of 
+rating variables simply having zero claims or exposures. Naturally, this will
+lead to ill-defined models - the traditional Gamma won't work, for example.
+
+The consequences of this are dire. For one, model validation becomes impossible
+just on this dataset alone. We can not naively split the aggregated dataset above because
+each row is unique. Therefore, the test set will contain unique combinations of
+rating variables that will be simply unobserved in the training set (and vice-versa).
+
+Second, feature selection (which is emphasized a lot in pricing since variables
+that have small or overfit effects directly impact the insured) and therefore, 
+model selection, is impossible. We cannot simply drop columns without affecting the number of rows. Thus,
+any sort of criteria based on the likelihood function (such as AIC/BIC/WAIC/LOO)
+is not viable since the likelihood function naturally scales with the data. In addition,
+since we cannot perform external validation we naturally cannot use wrapper based
+methods (like forward selection) that rely on held out datasets.
+
+## The Ideal Dataset
+
+The ideal dataset, at least hypothetically, would be a dataset where one row is 
+equal to one policyholder. The total number of earned exposures for the policyholder
+would be one column, and the total claim counts and total claim costs (for that
+policyholder) would be additional columns (from which we could model). The rating
+variables relevant for that policyholder would then be represented as additional
+columns.
+
+This would secure independence between the number of rating variables used
+and the number of rows. To obtain relativities, all we have to do is then 
+recreate the aggregated dataset (that is, one row is equal to one unique combination
+of exposures) from which we can then make our predictions of frequency and severity
+using our trained model (that was trained on the policyholder data). The model
+predicts it's best guess of $E[Y | X = \text{rating variables}]$ learned over all
+observed policyholders.
+
+## Aggregation Workarounds
+
+Ideally, 
