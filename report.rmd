@@ -2,7 +2,12 @@
 title: "A Fully Bayesian Way of Estimating Insurance Relativities"
 author: "Brayden Tang"
 date: "27/11/2020"
-output: html_document
+output:
+  html_document:
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: false
 ---
 
 ## Some Context
@@ -20,7 +25,7 @@ claims only (so no profit allocations or expenses).
 
 Naturally, pure premium is expressed simply as the rate at which a risk
 makes any kind of claim multiplied by the average amount per each claim. Thus, pure premium
-is defined as frequency * severity = \frac{total claim counts}{total risks = exposures} * \frac{total claim amounts}{total claim counts}  = \frac{total claim amounts}{total risks}.
+is defined as: $$ \text{frequency} \times \text{severity} = \frac{\text{total claim counts}}{\text{total risks = exposures}} \times \frac{\text{total claim amounts (losses)}}{\text{total claim counts}}  = \frac{\text{total claim amounts (losses)}}{\text{total risks}}.$$
 
 We can model either the frequency and severity distributions separately, or we 
 can model pure premium directly. The former approach is often preferred as 
@@ -46,21 +51,23 @@ knitr::opts_chunk$set(echo = TRUE)
 library(rstan)
 library(tidyverse)
 library(recipes)
-library(kableExtra)
+library(DT)
 ```
 
-I import the dataset below and show the first 10 rows:
+I import the dataset below:
 
 ```{r Import the data}
 
-data <- read_csv("../data/pricingdat.csv") 
+data <- read_csv("data/pricingdat.csv") 
 
-head(data, n = 10) %>%
-	kable() %>%
-	kableExtra::kable_styling()
+data %>% 
+	datatable(
+		rownames = FALSE,
+		options = list(scrollY = 300, searching = FALSE)) %>%
+	formatRound(columns = 6:7, digits = 0)
 
 ```
-
+<br>
 As is typical, one row represents one unique combination of rating variables, 
 containing the total number of claims observed, amount of exposures (i.e. number of risks,
 which is typically defined as the amount of policy earned over a period of one year) and
@@ -71,10 +78,6 @@ other more standard datasets. This is primarily due to the aggregation which cau
 columns to be dependent. If we add more rating variables (which are columns) to the dataset, 
 we naturally will get more rows since there will be more unique combinations of rating variables. 
 In fact, the number of rows will grow exponentially (see the curse of dimensionality).
-
-Each row will naturally become more sparse as well, with some combinations of 
-rating variables simply having zero claims or exposures. Naturally, this will
-lead to ill-defined models - the traditional Gamma won't work, for example.
 
 The consequences of this are dire. For one, model validation becomes impossible
 just on this dataset alone. We can not naively split the aggregated dataset above because
@@ -89,7 +92,18 @@ is not viable since the likelihood function naturally scales with the data. In a
 since we cannot perform external validation we naturally cannot use wrapper based
 methods (like forward selection) that rely on held out datasets.
 
-## The Ideal Dataset
+Third, each row will naturally become more sparse as well, with some combinations of 
+rating variables simply having zero claims or exposures. Naturally, this will
+lead to ill-defined models - the traditional gamma won't work, for example, since
+we will have exact zero losses. In the case of frequency distributions, there
+may also be particular levels of a rating variable that simply have zero exposures.
+This typically arises when a particular level that originally had some exposures many years ago decreases
+over time to the point where it no longer has any exposures (suppose a vehicle color simply seizes to exist within a book of business). Normally, this level can simply be dropped, but
+what happens when all of a sudden the exposure reappears in the future? Our data 
+is a single realization of some reality, but there is of course **uncertainty**.
+It could be by pure chance that we observed zero exposures.
+
+### Aside: The Ideal Dataset
 
 The ideal dataset, at least hypothetically, would be a dataset where one row is 
 equal to one policyholder. The total number of earned exposures for the policyholder
@@ -106,6 +120,51 @@ using our trained model (that was trained on the policyholder data). The model
 predicts it's best guess of $E[Y | X = \text{rating variables}]$ learned over all
 observed policyholders.
 
-## Aggregation Workarounds
+## Post-Adjustments
 
-Ideally, 
+The model is not perfect and there is an acceptance that the models may be overfit
+to the data, leading to relativites that are not reflective of the actual relativites.
+This often leads to actuaries manually adjusting relativites to be more in line
+with what their apriori beliefs are. For example, a vehicle with a larger engine would
+be expected to be of higher risk than a vehicle with a smaller engine since presumably
+the vehicles with larger engines are more expensive on average. Sometimes, the 
+relativities produced do not reflect this and so an actuary may decide to "manually"
+adjust the values to smooth said estimates. This is often done out of respect for the
+customer who may not appreciate being charged more in premium for what is perceived to be
+of lower risk. Depending on the actuary, they may just adjust relativities that are not monotonic. 
+
+While this approach may sound sketchy, I believe there may actually be merit to it
+in the sense that the relationship that is expected, or, a reasonable compromise to the prior belief
+**is** actually in the data once we consider the amount of uncertainty that exists within the data. This is 
+essentially what this manual adjustment is trying to account for, accepting that
+the data has some degree of noise and may not be fully reliable. 
+
+However, the adjustment is arbitrary if we do not actually know how much uncertainty we are 
+dealing with. In the case of traditional pricing modeling, it is difficult to actually
+quantify how much uncertainty we are dealing with because the frequency and severity
+models are estimated completely independently of each other. The expectations produced
+by each individual model are used to produce the pure premiums, which are then used to 
+calculate relativities. 
+
+However, it is clear that if we view frequency and severity as random variables
+that they are not independent. If we have a zero frequency, we must have a zero severity (or equivalently,
+if we have observed claims we must have non-zero severity, assuming that claims 
+below a deductible are ignored). Estimating both models separately ignores this.
+
+Viewing frequency and severity as random variables, and as a consequence, viewing pure premiums
+and relativities as random variables, is where Bayesian modeling will allow us
+to quantify the full amount of uncertainty in our data. This will allow actuaries to actually
+choose reasonable values that are in line with the amount of uncertainty that they
+have apriori and within the data. In addition, it allows actuaries to quantify 
+their confidence in allowing for a non-monotonic relativity, giving them the ability
+to defend said reversals.
+
+## The Bayesian/Generative Model
+
+
+
+
+
+
+
+
