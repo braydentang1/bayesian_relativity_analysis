@@ -130,8 +130,8 @@ be expected to be of higher risk than a vehicle with a smaller engine since pres
 the vehicles with larger engines are more expensive on average. Sometimes, the 
 relativities produced do not reflect this and so an actuary may decide to "manually"
 adjust the values to smooth said estimates. This is often done out of respect for the
-customer who may not appreciate being charged more in premium for what is perceived to be
-of lower risk. Depending on the actuary, they may just adjust relativities that are not monotonic. 
+customer who may not appreciate being charged more in premium when they perceive
+themselves as lower risk. Depending on the actuary, they may just adjust relativities that are not monotonic. 
 
 While this approach may sound sketchy, I believe there may actually be merit to it
 in the sense that the relationship that is expected, or, a reasonable compromise to the prior belief
