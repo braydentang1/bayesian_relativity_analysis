@@ -220,9 +220,8 @@ the weights are also random variables and everything is modeled simultaneously.
 
 It follows that $$X_{i} \times \frac{N_{i}}{\text{number of risks for ith combination}} = P_{i},$$ where 
 $P_{i}$ is the pure premium for the ith combination of rating variables, is also a random variable. Since
-we will have joint posterior draws of the two random variables the pure premium is a function of
-the posterior distribution of the pure premium is also known, as well as the corresponding relativities.
-
+we will have joint posterior draws of the two random variables that the pure premium is a function of,
+the posterior distribution of the pure premium (and relativities) is also known.
 
 
 
