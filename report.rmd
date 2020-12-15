@@ -10,6 +10,15 @@ output:
       smooth_scroll: false
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+library(rstan)
+library(tidyverse)
+library(recipes)
+library(DT)
+library(kableExtra)
+```
+
 ## Some Context
 I am not an actuarial student (anymore) but I recently completed a typical
 pricing assignment as part of an evaluation for a job application.
@@ -44,15 +53,33 @@ varying rating variable, where all of the other rating variables are held consta
 Then, we divide each pure premium per each level in the varied rating variable
 by the base class premium to obtain relativities for this particular rating variable.
 
-## The Dataset
+```{r relativities, echo = FALSE}
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
-library(rstan)
-library(tidyverse)
-library(recipes)
-library(DT)
+example_city_rels <- tibble(
+	City = c("Small City", "Medium City", "Large City"),
+	Relativity = c(0.95, 1, 1.50)
+	) %>%
+	kable() %>%
+	kable_styling()
+
+example_km_rels <- tibble(
+	Kilometres = c("Less Than 10,000km", "10,000-50,000km", "50,001-100,000km", "More Than 100,000km"),
+	Relativity = c(0.35, 0.76, 1, 1.378)
+) %>%
+	kable() %>%
+	kable_styling()
+
+knitr::kables(
+	list(example_city_rels, example_km_rels),
+	caption = "Figure 1: Example relativities with two rating variables") %>% 
+	kable_styling() 
+
 ```
+<br>
+Note that the vehicle described by the rating variables with relativities 1 (medium city & 50,001-100,000km) is the base class (in a linear model, this is the class described by the intercept). Relative to the base class, other vehicles have higher or lower premiums. The base class premium is multiplied by the corresponding relativities
+to derive the premiums for the other vehicle classes.
+
+## The Dataset
 
 I import the dataset below:
 
@@ -157,13 +184,44 @@ to quantify the full amount of uncertainty in our data. This will allow actuarie
 choose reasonable values that are in line with the amount of uncertainty that they
 have apriori and within the data. In addition, it allows actuaries to quantify 
 their confidence in allowing for a non-monotonic relativity, giving them the ability
-to defend said reversals.
+to defend any non-monotonic relativities.
 
 ## The Bayesian/Generative Model
 
+I describe the fully generative model below:
 
+Let $X$ be the severity random variable, $R_{i}$ be the rating variables,
+and $N$ be the claim counts. Assume that exposures are a known constant. 
 
+Then, for the ith unique combination of rating variables, $X_{i} > 0 \ \forall i$ let:
 
+$$
+X_{i} \big|N_{i}, \phi, \beta \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right), 
+$$
+
+$$
+\eta_{i} = exp(R_{i} \times \beta),
+$$
+$$N_{i} \big|\lambda{i} \sim Poisson(\lambda_{i}),$$
+$$\lambda_{i} = exp(R_{i} \times \psi),$$
+$$\beta \sim Normal(0, \tau),$$
+$$\psi \sim Normal(0, \omega),$$
+$$\phi \sim \text{Half-Cauchy}(0, \alpha).$$
+Note that $\alpha, \tau, \omega$ are constants that must be specified by the user.
+In addition, note that $$E[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{{\eta_{i} \times \phi}}{N_{i}} = \eta_{i}$$ but $$Var[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{{\eta_{i}^2 \times \phi^2}}{N_{i}^2} = \frac{\eta_{i}^2 \times \phi}{N_{i}}.$$
+
+That is, as the number of claims that makes up a severity calculation increases,
+the lower the variance of the resulting severity distribution for the particular
+combination of rating variables. Equivalently, the more claims for a particular 
+combination of rating variables, the more influence that particular combination
+of rating variables has on the overall model fit. This is pretty much the same
+thing as using weights in a gamma generalized linear model, however, in this case
+the weights are also random variables and everything is modeled simultaneously.
+
+It follows that $$X_{i} \times \frac{N_{i}}{\text{number of risks for ith combination}} = P_{i},$$ where 
+$P_{i}$ is the pure premium for the ith combination of rating variables, is also a random variable. Since
+we will have joint posterior draws of the two random variables the pure premium is a function of
+the posterior distribution of the pure premium is also known, as well as the corresponding relativities.
 
 
 
