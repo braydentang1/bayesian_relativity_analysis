@@ -212,7 +212,7 @@ $$\beta \sim Normal(0, \tau),$$
 $$\psi \sim Normal(0, \omega),$$
 $$\phi \sim \text{Half-Cauchy}(0, \alpha).$$
 Note that $\alpha, \tau, \omega$ are constants that must be specified by the user.
-In addition, note that $$E[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{{\eta_{i} \times \phi}}{N_{i}} = \eta_{i}$$ but $$Var[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{{\eta_{i}^2 \times \phi^2}}{N_{i}^2} = \frac{\eta_{i}^2 \times \phi}{N_{i}}.$$
+In addition, note that $$E[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{\eta_{i} \times \phi}{N_{i}} = \eta_{i}$$ but $$Var[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{{\eta_{i}^2 \times \phi^2}}{N_{i}^2} = \frac{\eta_{i}^2 \times \phi}{N_{i}}.$$
 
 That is, as the number of claims that makes up a severity calculation increases,
 the lower the variance of the resulting severity distribution for the particular
