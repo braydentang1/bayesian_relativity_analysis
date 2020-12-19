@@ -203,13 +203,9 @@ and $N$ be the claim counts. Assume that exposures are a known constant.
 
 Then, for the ith unique combination of rating variables, $X_{i} > 0 \ \forall i$ let:
 
-$$
-X_{i} \big|N_{i}, \phi, \beta \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{{\eta_{i}} \times \phi}\right), 
-$$
+$$X_{i} \big|N_{i}, \phi, \beta \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right),$$
 
-$$
-\eta_{i} = exp(R_{i} \times \beta),
-$$
+$$\eta_{i} = exp(R_{i} \times \beta),$$
 $$N_{i} \big|\lambda{i} \sim Poisson(\lambda_{i}),$$
 $$\lambda_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
 $$\beta \sim Normal(0, \tau),$$
