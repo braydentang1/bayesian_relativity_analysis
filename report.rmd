@@ -130,6 +130,14 @@ what happens when all of a sudden the exposure reappears in the future? Our data
 is a single realization of some reality, but there is of course **uncertainty**.
 It could be by pure chance that we observed zero exposures.
 
+Another solution to the above problem is to group the sparse level of the rating
+variable with another to remove this sparsity. This seems harmless, but in reality
+this corresponds to a deceivingly strong prior, namely that the different in estimated
+effects of each level is the same. In math, this corresponds to setting $\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some number very close to 0, and $\beta_{1}, \beta_{2}$ are the two separate rating
+variables being grouped. See [this video](https://www.youtube.com/watch?v=BKumW2RfSoQ&ab_channel=Stan) for more details. Regardless, grouping rating variables together is a very strong prior that
+is implicit. Rather than doing this, we can use mixed effects/hierarchical models
+instead to achieve pooling.
+
 ### Aside: The Ideal Dataset
 
 The ideal dataset, at least hypothetically, would be a dataset where one row is 
@@ -203,7 +211,7 @@ $$
 \eta_{i} = exp(R_{i} \times \beta),
 $$
 $$N_{i} \big|\lambda{i} \sim Poisson(\lambda_{i}),$$
-$$\lambda_{i} = exp(R_{i} \times \psi),$$
+$$\lambda_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
 $$\beta \sim Normal(0, \tau),$$
 $$\psi \sim Normal(0, \omega),$$
 $$\phi \sim \text{Half-Cauchy}(0, \alpha).$$
@@ -222,6 +230,51 @@ It follows that $$X_{i} \times \frac{N_{i}}{\text{number of risks for ith combin
 $P_{i}$ is the pure premium for the ith combination of rating variables, is also a random variable. Since
 we will have joint posterior draws of the two random variables that the pure premium is a function of,
 the posterior distribution of the pure premium (and relativities) is also known.
+
+## Stan Code
+
+Below is the exact same model I described above.
+
+```{stan output.var = "poisson_gamma_model"}
+data {
+  int<lower=1> Nobs;
+  int<lower=1> Nvar;
+  matrix[Nobs, Nvar] X;
+  int<lower=0> claim_count[Nobs];
+  vector<lower=0>[Nobs] exposure;
+  vector<lower=0>[Nobs] severity;
+}
+
+parameters {
+  vector[Nvar] beta_frequency;
+  vector[Nvar] beta_severity;
+  real<lower=0> dispersion_severity;
+}
+
+transformed parameters {
+  
+}
+
+model {
+  
+  beta_frequency ~ normal(0, 5);
+  beta_severity ~ normal(0, 5);
+  dispersion_severity ~ cauchy(0, 8);
+  
+  claim_count ~ poisson_log(X * beta_frequency + log(exposure));
+  
+  for (i in 1:Nobs) {
+    if (claim_count[i] != 0) {
+      severity[i] ~ gamma(
+      	claim_count[i] / dispersion_severity,
+      	claim_count[i] / (exp(X[i] * beta_severity) * dispersion_severity)
+      	);
+    }
+  }
+  
+}
+
+```
 
 
 
