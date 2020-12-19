@@ -132,8 +132,8 @@ It could be by pure chance that we observed zero exposures.
 
 Another solution to the above problem is to group the sparse level of the rating
 variable with another to remove this sparsity. This seems harmless, but in reality
-this corresponds to a deceivingly strong prior, namely that the different in estimated
-effects of each level is the same. In math, this corresponds to setting $\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some number very close to 0, and $\beta_{1}, \beta_{2}$ are the two separate rating
+this corresponds to a deceivingly strong prior, namely that the
+effects of each level on the response are the same. In math, this corresponds to setting $\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some number very close to 0, and $\beta_{1}, \beta_{2}$ are the two separate rating
 variables being grouped. See [this video](https://www.youtube.com/watch?v=BKumW2RfSoQ&ab_channel=Stan) for more details. Regardless, grouping rating variables together is a very strong prior that
 is implicit. Rather than doing this, we can use mixed effects/hierarchical models
 instead to achieve pooling.
