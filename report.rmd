@@ -204,7 +204,7 @@ and $N$ be the claim counts. Assume that exposures are a known constant.
 Then, for the ith unique combination of rating variables, $X_{i} > 0 \ \forall i$ let:
 
 $$
-X_{i} \big|N_{i}, \phi, \beta \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{{\eta_{i} \times \phi}}\right), 
+X_{i} \big|N_{i}, \phi, \beta \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{{\eta_{i}} \times \phi}\right), 
 $$
 
 $$
