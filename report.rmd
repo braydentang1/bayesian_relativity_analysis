@@ -3,11 +3,10 @@ title: "A Fully Bayesian Way of Estimating Insurance Relativities"
 author: "Brayden Tang"
 date: "27/11/2020"
 output:
-  html_document:
+  prettydoc::html_pretty:
+    theme: tactile
+    highlight: github
     toc: true
-    toc_float:
-      collapsed: false
-      smooth_scroll: false
 ---
 
 ```{r setup, include=FALSE}
@@ -17,6 +16,7 @@ library(tidyverse)
 library(recipes)
 library(DT)
 library(kableExtra)
+library(prettydoc)
 ```
 
 ## Some Context
