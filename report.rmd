@@ -72,7 +72,7 @@ knitr::kables(
 
 ```
 <br>
-Note that the vehicle described by the rating variables with relativities 1 (medium city & 50,001-100,000km) is the base class (in a linear model, this is the class described by the intercept). Relative to the base class, other vehicles have higher or lower premiums. The base class premium is multiplied by the corresponding relativities
+Note that the vehicle described by the levels of each rating variable with relativities 1 (medium city & 50,001-100,000km) is the base class (in a linear model, this is the class described by the intercept). Relative to the base class, other vehicles have higher or lower premiums. The base class premium is multiplied by the corresponding relativities
 to derive the premiums for the other vehicle classes.
 
 ## The Dataset
