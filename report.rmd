@@ -28,9 +28,8 @@ if I could get around some of the issues I had with these kinds of datasets
 from three years ago.
 
 The objective of actuarial relativity analysis is, at a high level, to most 
-accurately predict pure premiums as closely as possible. The pure premium is 
-the amount of money needed, on average, that is required to cover the cost of
-claims only (so no profit allocations or expenses).
+accurately predict the pure premium as closely as possible for all combinations of rating variables. The pure premium is the amount of money needed, on average, that is required to cover the cost of
+claims only (so no profit allocations or expenses). Rating variables are simply policyholder characteristics (such as the amount of kilometers on a vehicle, age of the policyholder, color of the vehicle, engine size, etc.)
 
 Naturally, pure premium is expressed simply as the rate at which a risk
 makes any kind of claim multiplied by the average amount per each claim. Thus, pure premium
@@ -45,13 +44,10 @@ it offers more flexibility and is at least logically, more robust.
 Relativities are simply the marginal impact a particular rating variable has on the
 response. This has the exact same interpretation as regression coefficients do
 in a multivariate linear model - holding all other variables constant, the regression
-coefficient represents the change in some quantity (say, the log of severity or
+coefficient represents the change in some quantity (say, the change in the log of severity or
 the log of frequency) per some change in said rating variable. 
 
-Relativities are typically calculated by calculating pure premiums across one
-varying rating variable, where all of the other rating variables are held constant.
-Then, we divide each pure premium per each level in the varied rating variable
-by the base class premium to obtain relativities for this particular rating variable.
+Relativities are typically calculated by predicting pure premiums across all of the levels of a particular rating variable, while simultaneously holding all of the other rating variables constant at the levels of some chosen base class. Then, each predicted pure premium is divided by the predicted pure premium of the relevant level from the base class.
 
 ```{r relativities, echo = FALSE}
 
@@ -83,7 +79,7 @@ to derive the premiums for the other vehicle classes.
 
 I import the dataset below:
 
-```{r Import the data}
+```{r Import the data, echo = FALSE}
 
 data <- read_csv("data/pricingdat.csv") 
 
@@ -133,10 +129,8 @@ It could be by pure chance that we observed zero exposures.
 Another solution to the above problem is to group the sparse level of the rating
 variable with another to remove this sparsity. This seems harmless, but in reality
 this corresponds to a deceivingly strong prior, namely that the
-effects of each level on the response are the same. In math, this corresponds to setting $\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some number very close to 0, and $\beta_{1}, \beta_{2}$ are the two separate rating
-variables being grouped. See [this video](https://www.youtube.com/watch?v=BKumW2RfSoQ&ab_channel=Stan) for more details. Regardless, grouping rating variables together is a very strong prior that
-is implicit. Rather than doing this, we can use mixed effects/hierarchical models
-instead to achieve pooling.
+effects of each level on the response are the same. In math, this corresponds to setting $\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some number very close to 0, and $\beta_{1}, \beta_{2}$ are the effects of the two separate levels being grouped. See [this video](https://www.youtube.com/watch?v=BKumW2RfSoQ&ab_channel=Stan) for more details. Regardless, grouping levels of rating variables together is a very strong prior that
+is implicit. Rather than doing this, we can use mixed effects/hierarchical models to achieve partial pooling, which is far more flexible and robust.
 
 ### Aside: The Ideal Dataset
 
@@ -203,11 +197,11 @@ and $N$ be the claim counts. Assume that exposures are a known constant.
 
 Then, for the ith unique combination of rating variables, $X_{i} > 0 \ \forall i$ let:
 
-$$X_{i} \big|N_{i}, \phi, \beta \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right),$$
+$$X_{i} \big|N_{i}, \phi, \eta_{i} \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right),$$
 
-$$\eta_{i} = exp(R_{i} \times \beta),$$
-$$N_{i} \big|\lambda{i} \sim Poisson(\lambda_{i}),$$
-$$\lambda_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
+$$\eta_{i} \big| \beta, R_{i} = exp(R_{i} \times \beta),$$
+$$N_{i} \big|\lambda_{i} \sim Poisson(\lambda_{i}),$$
+$$\lambda_{i} \big|\psi, R_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
 $$\beta \sim Normal(0, \tau),$$
 $$\psi \sim Normal(0, \omega),$$
 $$\phi \sim \text{Half-Cauchy}(0, \alpha).$$
