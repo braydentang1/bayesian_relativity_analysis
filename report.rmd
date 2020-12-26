@@ -17,6 +17,9 @@ library(recipes)
 library(DT)
 library(kableExtra)
 library(prettydoc)
+
+# CHANGE THIS BEFORE KNITING IF YOU WANT TO RERUN THE MCMC CHAINS.
+refit <- FALSE
 ```
 
 ## Some Context
@@ -221,6 +224,54 @@ $P_{i}$ is the pure premium for the ith combination of rating variables, is also
 we will have joint posterior draws of the two random variables that the pure premium is a function of,
 the posterior distribution of the pure premium (and relativities) is also known.
 
+In addition, this Bayesian approach helps solve problems related to the aggregation 
+of data. 
+
+### Feature Selection
+
+It was mentioned previously that feature selection is very difficult to carry out
+on an aggregated dataset where rows and columns are not independent. This is true
+if we are using explicit feature selection where rating variables are literally removed
+from the design matrix/training dataset.
+
+However, we can achieve feature selection through regularization as well. It turns
+out that L1 (LASSO), and L2 (ridge) are equivalent to Laplace and Normal zero mean priors on regression
+coefficients, for example. L1 regularization actually has the potential to explicitly 
+feature select as well, allowing for exactly zero coefficients. The cost parameter
+typically associated with these regularization techniques is exactly equal to the 
+variance of the Laplace/Normal distributions - the larger the variance, the lower the cost/regularization.
+Bayesians also allow for even more specific priors depending on the context, such as the
+horseshoe/spike and slab priors.
+
+In the Bayesian context, the variance is chosen based on our confidence that the (predictive)
+effects of each level are non-zero, apriori. Alternatively, one can choose to use an
+empirical Bayes approach and tune this variance parameter using something like cross validation.
+This is equivalent to the typical machine learning approach - but in the Bayes context this isn't
+as feasible since Bayesian models using MCMC are slow. An alternative is to use a Bayesian
+estimate of out of sample log pointwise predictive density using importance sampling (counterfactuals of the loglikelihood), but this as mentioned earlier is a problem with our aggregated dataset.
+
+Regardless, the Bayesian model allows us to use regularization while still remaining
+completely probabilistic. This will pay off when we look at relativities.
+
+### Predictive Performance
+
+The other main issue involved the issue of model validation in terms of predictive 
+performance. We cannot just naively split the dataset nor can we use likelihood based 
+evaluation metrics, like ELPD (since the dataset has rows as a function of the number of columns).
+
+Unfortunately, I still haven't figured out a great way to solve this issue. The
+only alternative may be to perform posterior predictive checks, but these are known
+to be biased for predictive performance because this involves in-sample data (despite its name).
+Posterior predictive checks are mainly used for assessing the in-sample fit of a generative model
+to the data.
+
+However, because we are providing full distributional predictions an argument
+can be made that naturally, the model (when correctly specified) will at least have the 
+ability to give an interval of the true, underlying relativity for a future
+policyholder. While the model may still not assign a high mass to the true underlying relativity
+in some cases (which, if we had the ideal dataset we could detect this) an argument could be made
+that the true relativity was at least a possibility described by the model (say in a credible interval), something other traditional frequentist/machine learning methodologies do not have.
+
 ## Stan Code
 
 Below is the exact same model I described above.
@@ -265,6 +316,147 @@ model {
 }
 
 ```
+
+Next, I preprocess the data in a suitable format for Stan. 
+
+```{r Preprocessing}
+
+data_with_severity <- data %>%
+	mutate(
+		severity = ifelse(claim_count != 0, claim_payments / claim_count, 0), 
+		kilometres = as.factor(kilometres),
+		zone = as.factor(zone),
+		bonus = as.factor(bonus),
+		make = as.factor(make),
+		observed_pp = claim_payments / vehicle_exposure_years
+	)
+
+preprocessing <- recipe(claim_count ~ ., data = data_with_severity) %>%
+	step_dummy(all_nominal())
+
+prepped_recipe <- prep(preprocessing, training = data_with_severity)
+
+X <- juice(prepped_recipe) %>%
+	mutate(intercept = rep(1, nrow(.))) %>%
+	relocate(intercept) %>%
+	select(
+		-vehicle_exposure_years,
+		-claim_payments,
+		-severity, 
+		-claim_count, 
+		-observed_pp
+		) 
+
+data_list <- list(
+	Nobs = nrow(X),
+	Nvar = ncol(X),
+	X = as.matrix.data.frame(X),
+	claim_count = data_with_severity$claim_count,
+	exposure = data_with_severity$vehicle_exposure_years,
+	severity = data_with_severity$severity
+)
+
+```
+
+Now we sample from the posterior distribution as required:
+
+```{r Sample from Posterior - Poisson/Gamma}
+
+if (refit == TRUE) {
+	fit_poisson_gamma <- sampling(
+		poisson_gamma_model,
+		data = data_list,
+		chains = 6,
+		iter = 6000,
+		seed = 200350623,
+		cores = 6,
+		verbose = TRUE
+		)
+	
+	saveRDS(fit_poisson_gamma, "rds/fittedPGmodel.rds")
+} else {
+	fit_poisson_gamma <- readRDS("rds/fittedPGmodel.rds")
+}
+
+```
+
+This function extracts the required samples from the MCMC sampler.
+```{r Helper Function For Extraction of Posterior Parameters}
+#' Extract the required mean/dispersion parameters for both candidate frequency
+#` and severity distributions.
+#'
+#' @param fitted_model A Stan fitted model (the result of rstan::sampling).
+#`	This model MUST have named parameters beta_frequency, beta_severity, 
+#`	and can optionally have parameters dispersion_frequency and 
+#`  dispersion_severity.
+#' @param exposures A vector of length N containing the exposures
+#' @param X The design matrix of rating variables
+#'
+#' @return A list containing matrices/vectors of posterior samples of the 
+#` required probability distributions.
+#' @export
+#'
+#' @examples 
+#` \dontrun{
+#` extract_and_get_posterior_samples(
+#` my_stan_fitted,
+#` vehicle_exposure_years,
+#` X_design
+#` )
+#`}
+extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
+	
+	samples <- rstan::extract(fitted_model)
+	exposure <- matrix(
+		log(exposures),
+		nrow = nrow(samples$beta_frequency),
+		ncol = length(exposures),
+		byrow = TRUE
+		)
+	
+	if (is.null(samples$dispersion_frequency)) {
+		dispersion_frequency_samples <- NULL
+	} else {
+		dispersion_frequency_samples <- samples$dispersion_frequency
+	}
+	
+	if (is.null(samples$dispersion_severity)) {
+		dispersion_severity_samples <- NULL
+	} else {
+		dispersion_severity_samples <- samples$dispersion_severity
+	}
+	
+	list(
+		frequency_samples = exp(
+			samples$beta_frequency %*% t(as.matrix.data.frame(X)) + exposure
+			),
+		severity_samples = exp(
+			samples$beta_severity %*% t(as.matrix.data.frame(X))
+			),
+		dispersion_frequency_samples = dispersion_frequency_samples,
+		dispersion_severity_samples = dispersion_severity_samples,
+		exposures = exposure
+	)
+	
+}
+
+# Extract the samples for the Poisson-Gamma model.
+pg_posterior_samples <- extract_and_get_posterior_samples(
+	fitted_model = fit_poisson_gamma,
+	exposures = data_with_severity$vehicle_exposure_years,
+	X = X
+)
+
+```
+
+## Posterior Predictive Checks
+
+Does the underlying generative model fit the dataset well? We check this below:
+
+Note that these are misleading in the sense that they aren't actual assessments
+of predictive performance, but of in-sample fit as discussed above. Still, if the 
+model severely underfits the underlying data then the model will not predict well. 
+
 
 
 
