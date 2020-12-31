@@ -25,7 +25,7 @@ refit <- FALSE
 ## Some Context
 I am not an actuarial student (anymore) but I recently completed a typical
 pricing assignment as part of an evaluation for a job application.
-I didn't end up applying, however I enjoyed having a (fake) familiar kind
+I didn't end up applying, however I enjoyed having a familiar (and fake) kind
 of dataset that I used to work with all the time in my past life. I wanted to see
 if I could get around some of the issues I had with these kinds of datasets
 from three years ago.
@@ -36,7 +36,11 @@ claims only (so no profit allocations or expenses). Rating variables are simply 
 
 Naturally, pure premium is expressed simply as the rate at which a risk
 makes any kind of claim multiplied by the average amount per each claim. Thus, pure premium
-is defined as: $$ \text{frequency} \times \text{severity} = \frac{\text{total claim counts}}{\text{total risks = exposures}} \times \frac{\text{total claim amounts (losses)}}{\text{total claim counts}}  = \frac{\text{total claim amounts (losses)}}{\text{total risks}}.$$
+is defined as: 
+
+$$ \text{frequency} \times \text{severity} = \frac{\text{total claim counts}}{\text{total risks = exposures}} \times \frac{\text{total claim amounts (losses)}}{\text{total claim counts}} $$ 
+
+$$ = \frac{\text{total claim amounts (losses)}}{\text{total risks}}.$$
 
 We can model either the frequency and severity distributions separately, or we 
 can model pure premium directly. The former approach is often preferred as 
@@ -50,7 +54,10 @@ in a multivariate linear model - holding all other variables constant, the regre
 coefficient represents the change in some quantity (say, the change in the log of severity or
 the log of frequency) per some change in said rating variable. 
 
-Relativities are typically calculated by predicting pure premiums across all of the levels of a particular rating variable, while simultaneously holding all of the other rating variables constant at the levels of some chosen base class. Then, each predicted pure premium is divided by the predicted pure premium of the relevant level from the base class.
+Relativities are typically calculated by predicting pure premiums across all of the levels of a particular rating variable, while simultaneously holding all of the other rating variables constant at the levels of some chosen base class. The base class represents one specific combination of rating variables that all other classes are compared against. Other combinations of rating variables are more risky (higher pure premium) or less risky (lower pure premium), **relative** to this base class.
+
+Thus, each predicted pure premium is divided by the predicted pure premium of the relevant level from the base class to
+obtain these relativities.
 
 ```{r relativities, echo = FALSE}
 
@@ -62,7 +69,9 @@ example_city_rels <- tibble(
 	kable_styling()
 
 example_km_rels <- tibble(
-	Kilometres = c("Less Than 10,000km", "10,000-50,000km", "50,001-100,000km", "More Than 100,000km"),
+	Kilometres = c(
+		"Less Than 10,000km", "10,000-50,000km", "50,001-100,000km", "More Than 100,000km"
+		),
 	Relativity = c(0.35, 0.76, 1, 1.378)
 ) %>%
 	kable() %>%
@@ -89,7 +98,7 @@ data <- read_csv("data/pricingdat.csv")
 data %>% 
 	datatable(
 		rownames = FALSE,
-		options = list(scrollY = 300, searching = FALSE)) %>%
+		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
 	formatRound(columns = 6:7, digits = 0)
 
 ```
@@ -105,21 +114,21 @@ columns to be dependent. If we add more rating variables (which are columns) to 
 we naturally will get more rows since there will be more unique combinations of rating variables. 
 In fact, the number of rows will grow exponentially (see the curse of dimensionality).
 
-The consequences of this are dire. For one, model validation becomes impossible
-just on this dataset alone. We can not naively split the aggregated dataset above because
-each row is unique. Therefore, the test set will contain unique combinations of
+The consequences of this are dire. For one, model validation becomes very difficult.
+We can not naively split the aggregated dataset above because
+each row is unique. Therefore, any possible test set will contain unique combinations of
 rating variables that will be simply unobserved in the training set (and vice-versa).
 
-Second, feature selection (which is emphasized a lot in pricing since variables
-that have small or overfit effects directly impact the insured) and therefore, 
+Second, feature selection (which is emphasized a lot in pricing since there is strong
+desire to have as simple of a rating algorithm as possible) and therefore, 
 model selection, is impossible. We cannot simply drop columns without affecting the number of rows. Thus,
 any sort of criteria based on the likelihood function (such as AIC/BIC/WAIC/LOO)
-is not viable since the likelihood function naturally scales with the data. In addition,
+are not viable since the likelihood function naturally scales with the data. In addition,
 since we cannot perform external validation we naturally cannot use wrapper based
 methods (like forward selection) that rely on held out datasets.
 
-Third, each row will naturally become more sparse as well, with some combinations of 
-rating variables simply having zero claims or exposures. Naturally, this will
+Third, each row will become more sparse as well due to the curse of dimensionality,
+with some combinations of rating variables simply having zero claims or exposures. Naturally, this will
 lead to ill-defined models - the traditional gamma won't work, for example, since
 we will have exact zero losses. In the case of frequency distributions, there
 may also be particular levels of a rating variable that simply have zero exposures.
@@ -133,7 +142,7 @@ Another solution to the above problem is to group the sparse level of the rating
 variable with another to remove this sparsity. This seems harmless, but in reality
 this corresponds to a deceivingly strong prior, namely that the
 effects of each level on the response are the same. In math, this corresponds to setting $\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some number very close to 0, and $\beta_{1}, \beta_{2}$ are the effects of the two separate levels being grouped. See [this video](https://www.youtube.com/watch?v=BKumW2RfSoQ&ab_channel=Stan) for more details. Regardless, grouping levels of rating variables together is a very strong prior that
-is implicit. Rather than doing this, we can use mixed effects/hierarchical models to achieve partial pooling, which is far more flexible and robust.
+is not at all transparent. Rather than doing this, we can use mixed effects/hierarchical models to achieve partial pooling, which is far more flexible and robust.
 
 ### Aside: The Ideal Dataset
 
@@ -145,10 +154,8 @@ variables relevant for that policyholder would then be represented as additional
 columns.
 
 This would secure independence between the number of rating variables used
-and the number of rows. To obtain relativities, all we have to do is then 
-recreate the aggregated dataset (that is, one row is equal to one unique combination
-of exposures) from which we can then make our predictions of frequency and severity
-using our trained model (that was trained on the policyholder data). The model
+and the number of rows. To obtain relativities, the aggregated dataset could be recreated
+(that is, one row is equal to one unique combination of exposures) from which we could then make our predictions of frequency and severity using our trained model (that was trained on the policyholder data). The model
 predicts it's best guess of $E[Y | X = \text{rating variables}]$ learned over all
 observed policyholders.
 
@@ -237,10 +244,10 @@ from the design matrix/training dataset.
 However, we can achieve feature selection through regularization as well. It turns
 out that L1 (LASSO), and L2 (ridge) are equivalent to Laplace and Normal zero mean priors on regression
 coefficients, for example. L1 regularization actually has the potential to explicitly 
-feature select as well, allowing for exactly zero coefficients. The cost parameter
+feature select as well, allowing for exactly zero coefficients (albeit, we are not maximizing but averaging in MCMC so we won't ever get this exactly in the Bayesian approach). The cost parameter
 typically associated with these regularization techniques is exactly equal to the 
 variance of the Laplace/Normal distributions - the larger the variance, the lower the cost/regularization.
-Bayesians also allow for even more specific priors depending on the context, such as the
+Bayesian approaches also allow for even more specific priors depending on the context, such as the
 horseshoe/spike and slab priors.
 
 In the Bayesian context, the variance is chosen based on our confidence that the (predictive)
@@ -248,7 +255,7 @@ effects of each level are non-zero, apriori. Alternatively, one can choose to us
 empirical Bayes approach and tune this variance parameter using something like cross validation.
 This is equivalent to the typical machine learning approach - but in the Bayes context this isn't
 as feasible since Bayesian models using MCMC are slow. An alternative is to use a Bayesian
-estimate of out of sample log pointwise predictive density using importance sampling (counterfactuals of the loglikelihood), but this as mentioned earlier is a problem with our aggregated dataset.
+estimate of out of sample log pointwise predictive density (ELPD) using importance sampling (counterfactuals of the loglikelihood), but this as mentioned earlier is a problem with our aggregated dataset.
 
 Regardless, the Bayesian model allows us to use regularization while still remaining
 completely probabilistic. This will pay off when we look at relativities.
@@ -290,10 +297,6 @@ parameters {
   vector[Nvar] beta_frequency;
   vector[Nvar] beta_severity;
   real<lower=0> dispersion_severity;
-}
-
-transformed parameters {
-  
 }
 
 model {
@@ -439,7 +442,10 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 	)
 	
 }
+```
 
+We now extract the posterior samples.
+```{r}
 # Extract the samples for the Poisson-Gamma model.
 pg_posterior_samples <- extract_and_get_posterior_samples(
 	fitted_model = fit_poisson_gamma,
@@ -451,7 +457,7 @@ pg_posterior_samples <- extract_and_get_posterior_samples(
 
 ## Posterior Predictive Checks
 
-Does the underlying generative model fit the dataset well? We check this below:
+Does the underlying generative model fit the dataset well?
 
 Note that these are misleading in the sense that they aren't actual assessments
 of predictive performance, but of in-sample fit as discussed above. Still, if the 
