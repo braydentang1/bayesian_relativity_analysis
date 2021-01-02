@@ -70,7 +70,10 @@ example_city_rels <- tibble(
 
 example_km_rels <- tibble(
 	Kilometres = c(
-		"Less Than 10,000km", "10,000-50,000km", "50,001-100,000km", "More Than 100,000km"
+		"Less Than 10,000km",
+		"10,000-50,000km",
+		"50,001-100,000km",
+		"More Than 100,000km"
 		),
 	Relativity = c(0.35, 0.76, 1, 1.378)
 ) %>%
@@ -133,7 +136,7 @@ lead to ill-defined models - the traditional gamma won't work, for example, sinc
 we will have exact zero losses. In the case of frequency distributions, there
 may also be particular levels of a rating variable that simply have zero exposures.
 This typically arises when a particular level that originally had some exposures many years ago decreases
-over time to the point where it no longer has any exposures (suppose a vehicle color simply seizes to exist within a book of business). Normally, this level can simply be dropped, but
+over time to the point where it no longer has any exposures (suppose a vehicle color simply ceases to exist within a book of business). Normally, this level can simply be dropped, but
 what happens when all of a sudden the exposure reappears in the future? Our data 
 is a single realization of some reality, but there is of course **uncertainty**.
 It could be by pure chance that we observed zero exposures.
@@ -205,7 +208,7 @@ I describe the fully generative model below:
 Let $X$ be the severity random variable, $R_{i}$ be the rating variables,
 and $N$ be the claim counts. Assume that exposures are a known constant. 
 
-Then, for the ith unique combination of rating variables, $X_{i} > 0 \ \forall i$ let:
+Then, for the ith unique combination of rating variables, $\forall i \ X_{i} > 0$ let:
 
 $$X_{i} \big|N_{i}, \phi, \eta_{i} \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right),$$
 
@@ -281,7 +284,10 @@ that the true relativity was at least a possibility described by the model (say 
 
 ## Stan Code
 
-Below is the exact same model I described above.
+Below is the exact same model I described above. In this case, I set $\tau$ and $\omega$ to 5 which are "weakly informative" priors. I don't really have strong apriori beliefs regarding the effects but 
+I still want enough regularization to shrink effects to 0, if it is justifiable. 
+
+For the variance parameter, I set $\alpha$ to 8. Again, this leads to a weakly informative prior, but in general I wanted to allow for the possibility of large conditional variances for particular rating combinations. Large losses likely have large dispersions, and some rating combinations may even have extreme dispersions depending on the observed data. 
 
 ```{stan output.var = "poisson_gamma_model"}
 data {
@@ -445,24 +451,304 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 ```
 
 We now extract the posterior samples.
-```{r}
+```{r Extract Posterior Samples}
 # Extract the samples for the Poisson-Gamma model.
 pg_posterior_samples <- extract_and_get_posterior_samples(
 	fitted_model = fit_poisson_gamma,
 	exposures = data_with_severity$vehicle_exposure_years,
 	X = X
 )
-
 ```
 
 ## Posterior Predictive Checks
 
 Does the underlying generative model fit the dataset well?
 
+```{r Posterior Predictive Check function, echo = FALSE}
+#' Generates posterior parameter samples for the weighted gamma.
+#'
+#' @param posterior_predictive_samples Matrix of posterior predictive samples.
+#' @param y Vector of observations representing the actuals.
+#' @param n Number of samples to plot. Must be less than the number of rows in
+#'	posterior_predictive_samples.
+#' @param variable Character string for graphing purposes.
+#' @param limits Vector of upper and lower limits to plot (zooming in on the plot).
+#'
+#' @return None.
+#' @export
+#'
+#' @examples
+#' posterior_predictive_check(
+#`	my_posterior_samples, n = 1000, variable = "claims"
+#` )
+posterior_pred_check <- function(posterior_predictive_samples, y, n, variable,
+																 limits) {
+
+	data_tibble <- as_tibble(posterior_predictive_samples[1:n, ]) %>%
+		mutate(iter = 1:nrow(.)) %>%
+		gather(key = "obs", value = "var", -iter) %>%
+		select(-obs)
+	
+	ggplot(data_tibble, aes(x = var)) +
+		geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
+		theme_bw() +
+		scale_x_continuous(trans = "sqrt") +
+		geom_density(
+			data = tibble(actual = y),
+			aes(x = actual), 
+			size = 0.75, 
+			alpha = 0.3
+			) +
+		coord_cartesian(xlim = limits, expand = FALSE) +
+		labs(x = variable)
+
+}
+```
+
 Note that these are misleading in the sense that they aren't actual assessments
 of predictive performance, but of in-sample fit as discussed above. Still, if the 
-model severely underfits the underlying data then the model will not predict well. 
+model severely underfits the underlying data then the model will very likely not predict well. 
 
+### Posterior Predictive Check - Frequency
 
+First, I generate samples from the posterior predictive distribution as follows.
+I then perform the posterior predictive check (i.e. compare the genrated data 
+against the observed data).
+
+```{r Generate Samples}
+
+# Basically, flatten the matrix of frequencies to a vector, generate a vector 
+# of length equal to this vector using each of these frequencies, then convert
+# back
+set.seed(200350623)
+claim_count_posterior_pred <- rpois(
+	n = length(pg_posterior_samples$frequency_samples),
+	lambda = pg_posterior_samples$frequency_samples
+	)
+
+dim(claim_count_posterior_pred) <- dim(pg_posterior_samples$frequency_samples)
+```
+<center>
+```{r Posterior Predictive Check - Frequency}
+posterior_pred_check(
+	claim_count_posterior_pred,
+	y = data$claim_count,
+	n = 1000, 
+	"claims (log2 scaled)",
+	limits = c(0, 700)
+	)
+```
+</center>
+
+The blue curves represent 1000 simulated datasets generated from the posterior predictive.
+The black curve is the actual, observed dataset (in this, claim counts). Ideally,
+we want the black curve to fall **well** within the blue region as this implies
+that the actual, observed dataset is a likely realization under our generative model.
+
+The posterior predictive graphs are all zoomed in on the region where the density is not trivially 0 
+for easier inspection.
+
+Overall, we can see that the frequency model looks decent at most of the claim count
+ranges (especially the lower claim counts), but the rating combinations
+with larger claim counts seem to be more variable than what the model can explain.
+
+That is, the distribution of claim counts exhibits possible overdispersion. Thus,
+a possible improvement to the model might be to use the negative binomial distribution
+instead, rather than the Poisson.
+
+### Posterior Predictive Check - Severity
+
+Similarily, we get posterior predictive draws of severities per each combination
+of rating variables.
+
+```{r}
+
+#' Computes the posterior parameters for the weighted Gamma distribution.
+#'
+#' @param posterior_samples Posterior parameter samples from the Stan model.
+#' @param posterior_predictive_claim_counts Posterior predictive claim counts.
+#'  Must be a matrix.
+#'
+#' @return A list with posterior shape and rate parameters.
+#' @export
+#'
+#' @examples sample_weighted_gamma(
+#' posterior_samples, claim_counts_nb)
+#'
+#'
+#'
+sample_weighted_gamma <- function(
+	posterior_samples,
+	posterior_predictive_claim_counts) {
+	
+	dispersion_severity_posterior <- matrix(
+		posterior_samples$dispersion_severity_samples,
+		nrow = nrow(posterior_samples$frequency_samples),
+		ncol = ncol(posterior_samples$frequency_samples)
+		)
+	
+	shapes_posterior <- posterior_predictive_claim_counts / 
+		dispersion_severity_posterior
+	
+	rates_posterior <- posterior_predictive_claim_counts /
+		(posterior_samples$severity_samples * dispersion_severity_posterior)
+	
+	list(shapes = shapes_posterior, rates = rates_posterior)
+	
+	}
+
+posterior_sev_samples_pg <- sample_weighted_gamma(
+	pg_posterior_samples,
+	claim_count_posterior_pred	
+)
+
+set.seed(200350623)
+simulate_severity <- rgamma(
+	n = length(pg_posterior_samples$severity_samples),
+	shape = posterior_sev_samples_pg$shapes,
+	rate = posterior_sev_samples_pg$rates
+	)
+
+dim(simulate_severity) <- dim(pg_posterior_samples$severity_samples)
+```
+<center>
+```{r}
+posterior_pred_check(
+	simulate_severity,
+	y = data_with_severity$severity,
+	n = 1000,
+	variable = "severity (log2 scaled)",
+	limits = c(0, 40000)
+	)
+
+```
+</center>
+As we can see in this case, the generative model looks off here. The model underfits the most important areas of largest density (the large spike) and fails to account for uncertainty at higher and lower levels 
+of severity.
+
+Unlike the frequency distribution, however, it is difficult to say if the gamma is simply inadequate here because this
+distribution is dependent on how well the frequency distribution is defined as well. Fixing the issues with the frequency distribution could yield improvements here. In addition, simply choosing a more right skewed
+distribution could be beneficial here.
+
+Ultimately, however, the goal is the pure premium since our relativities are based
+on these quantities. 
+
+### Posterior Predictive Check - Pure Premium
+
+```{r Posterior Predictive Check - PP}
+
+simulate_pure_premium <- (
+	claim_count_posterior_pred / exp(pg_posterior_samples$exposures)
+	) * simulate_severity
+```
+<center>
+```{r}
+posterior_pred_check(
+	simulate_pure_premium,
+	y = data_with_severity$observed_pp,
+	n = 1000,
+	variable = "pure premium (log2 scaled)",
+	limits = c(0, 4000)
+)
+
+```
+</center>
+The "spikes" in the distribution are not as extreme as what is observed in the data. The black curve does not fall in the blue region in important areas of the distribution, namely the single peak. Thus, under the generative model the observed data is simply not probable in some regions of pure premium, which is an issue.
+
+Otherwise, the generative model at least has the right shape, for the most part. 
+## Model Revision - Switch Frequency to Negative Binomial
+
+We noticed in the previous section that the Poisson distribution does not account for as much variance as we would like. Indeed, the variance of the Poisson distribution is equal to its mean. 
+
+A negative binomial has variance greater than its mean and therefore could address issues
+where uncertainty is understated for particular rating variable combinations with large claim counts.
+
+The generative model is quite similar to the previous model, but we switch the frequency distribution:
+
+$$X_{i} \big|N_{i}, \phi, \eta_{i} \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right),$$
+
+$$\eta_{i} \big| \beta, R_{i} = exp(R_{i} \times \beta),$$
+$$N_{i} \big|\xi_{i}, \nu \sim \text{Negative Binomial}(\xi_{i}, \nu),$$
+$$\xi_{i} \big|\psi, R_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
+$$\beta \sim Normal(0, 5),$$
+$$\psi \sim Normal(0, 5),$$
+$$\phi \sim \text{Half-Cauchy}(0, 8),$$
+$$\nu \sim \text{Half-Cauchy}(0, 8).$$
+Note that the Negative Binomial is using the mean, dispersion parameterization in Stan (i.e. NegativeBinomial2).
+
+Compiling the model above in Stan:
+
+```{stan output.var = "nb_gamma"}
+
+data {
+  int<lower=1> Nobs;
+  int<lower=1> Nvar;
+  matrix[Nobs, Nvar] X;
+  int<lower=0> claim_count[Nobs];
+  vector<lower=0>[Nobs] exposure;
+  vector<lower=0>[Nobs] severity;
+}
+
+parameters {
+  vector[Nvar] beta_frequency;
+  vector[Nvar] beta_severity;
+  real<lower=0> dispersion_severity;
+  real<lower=0> dispersion_frequency;
+}
+
+model {
+  
+  beta_frequency ~ normal(0, 5);
+  beta_severity ~ normal(0, 5);
+  dispersion_severity ~ cauchy(0, 8);
+  dispersion_frequency ~ cauchy(0, 8);
+  
+  claim_count ~ neg_binomial_2_log(
+  	X * beta_frequency + log(exposure), dispersion_frequency
+  );
+  
+  for (i in 1:Nobs) {
+    if (claim_count[i] != 0) {
+      severity[i] ~ gamma(
+      	claim_count[i] / dispersion_severity,
+      	claim_count[i] / (exp(X[i] * beta_severity) * dispersion_severity)
+      	);
+    }
+  }
+  
+}
+```
+
+We again sample from the posterior distribution again:
+
+Now we sample from the posterior distribution as required:
+
+```{r Sample from Posterior - NB/Gamma}
+
+if (refit == TRUE) {
+	fit_nb_gamma <- sampling(
+		nb_gamma,
+		data = data_list,
+		chains = 6,
+		iter = 6000,
+		seed = 200350623,
+		cores = 6,
+		verbose = TRUE
+		)
+	
+	saveRDS(fit_nb_gamma, "rds/nb-weighted_gamma.rds")
+} else {
+	fit_nb_gamma <- readRDS("rds/nb-weighted_gamma.rds")
+}
+
+nb_posterior_samples <- extract_and_get_posterior_samples(
+	fitted_model = fit_nb_gamma,
+	exposures = data_with_severity$vehicle_exposure_years,
+	X = X
+)
+
+```
+
+## Posterior Predictive Check - Revision I
 
 
