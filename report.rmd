@@ -528,8 +528,8 @@ claim_count_posterior_pred <- rpois(
 
 dim(claim_count_posterior_pred) <- dim(pg_posterior_samples$frequency_samples)
 ```
-<center>
-```{r Posterior Predictive Check - Frequency}
+
+```{r Posterior Predictive Check - Frequency, fig.align="center", fig.height=6, fig.width=10}
 posterior_pred_check(
 	claim_count_posterior_pred,
 	y = data$claim_count,
@@ -538,7 +538,6 @@ posterior_pred_check(
 	limits = c(0, 700)
 	)
 ```
-</center>
 
 The blue curves represent 1000 simulated datasets generated from the posterior predictive.
 The black curve is the actual, observed dataset (in this, claim counts). Ideally,
@@ -611,8 +610,8 @@ simulate_severity <- rgamma(
 
 dim(simulate_severity) <- dim(pg_posterior_samples$severity_samples)
 ```
-<center>
-```{r}
+
+```{r, fig.align="center", fig.height=6, fig.width=10}
 posterior_pred_check(
 	simulate_severity,
 	y = data_with_severity$severity,
@@ -636,13 +635,12 @@ on these quantities.
 ### Posterior Predictive Check - Pure Premium
 
 ```{r Posterior Predictive Check - PP}
-
 simulate_pure_premium <- (
 	claim_count_posterior_pred / exp(pg_posterior_samples$exposures)
 	) * simulate_severity
 ```
-<center>
-```{r}
+
+```{r, echo = FALSE, fig.align="center", fig.height=6, fig.width=10}
 posterior_pred_check(
 	simulate_pure_premium,
 	y = data_with_severity$observed_pp,
@@ -652,7 +650,7 @@ posterior_pred_check(
 )
 
 ```
-</center>
+
 The "spikes" in the distribution are not as extreme as what is observed in the data. The black curve does not fall in the blue region in important areas of the distribution, namely the single peak. Thus, under the generative model the observed data is simply not probable in some regions of pure premium, which is an issue.
 
 Otherwise, the generative model at least has the right shape, for the most part. 
@@ -750,5 +748,3 @@ nb_posterior_samples <- extract_and_get_posterior_samples(
 ```
 
 ## Posterior Predictive Check - Revision I
-
-
