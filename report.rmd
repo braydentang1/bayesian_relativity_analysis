@@ -621,7 +621,6 @@ posterior_pred_check(
 	)
 
 ```
-</center>
 As we can see in this case, the generative model looks off here. The model underfits the most important areas of largest density (the large spike) and fails to account for uncertainty at higher and lower levels 
 of severity.
 
@@ -640,7 +639,7 @@ simulate_pure_premium <- (
 	) * simulate_severity
 ```
 
-```{r, echo = FALSE, fig.align="center", fig.height=6, fig.width=10}
+```{r, fig.align="center", fig.height=6, fig.width=10}
 posterior_pred_check(
 	simulate_pure_premium,
 	y = data_with_severity$observed_pp,
