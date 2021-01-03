@@ -17,6 +17,7 @@ library(recipes)
 library(DT)
 library(kableExtra)
 library(prettydoc)
+library(patchwork)
 
 # CHANGE THIS BEFORE KNITING IF YOU WANT TO RERUN THE MCMC CHAINS.
 refit <- FALSE
@@ -89,6 +90,8 @@ knitr::kables(
 <br>
 Note that the vehicle described by the levels of each rating variable with relativities 1 (medium city & 50,001-100,000km) is the base class (in a linear model, this is the class described by the intercept). Relative to the base class, other vehicles have higher or lower premiums. The base class premium is multiplied by the corresponding relativities
 to derive the premiums for the other vehicle classes.
+
+For example, suppose the base class pure premium (the premium for a policyholder who drives in the medium city and has a vehicle with 50,001-100,000km) is $1000. Then, the pure premium for a policyholder who drives in the small city with a vehicle that has more than 100,000km of mileage has a pure premium of \$1000 * 0.95 * 1.378 = '\$1309.10.
 
 ## The Dataset
 
@@ -229,10 +232,13 @@ of rating variables has on the overall model fit. This is pretty much the same
 thing as using weights in a gamma generalized linear model, however, in this case
 the weights are also random variables and everything is modeled simultaneously.
 
-It follows that $$X_{i} \times \frac{N_{i}}{\text{number of risks for ith combination}} = P_{i},$$ where 
+It follows that $$X_{i} \times \frac{N_{i}}{\text{number of exposures for ith combination}} = P_{i},$$ where 
 $P_{i}$ is the pure premium for the ith combination of rating variables, is also a random variable. Since
 we will have joint posterior draws of the two random variables that the pure premium is a function of,
 the posterior distribution of the pure premium (and relativities) is also known.
+
+The above formulation should also give insight into what combination of rating variables
+should, in general, represent the base class pure premium. It is clear that the variance of the pure premium for the ith combination is $\frac{Var[X_{i}]}{\text{exposures}_{i}^2}$. Thus, choosing the base class with the largest amount of exposures will often yield a low varying (i.e. stable) pure premium (assuming the severity variance is not extremely large).
 
 In addition, this Bayesian approach helps solve problems related to the aggregation 
 of data. 
@@ -615,7 +621,7 @@ dim(simulate_severity) <- dim(pg_posterior_samples$severity_samples)
 posterior_pred_check(
 	simulate_severity,
 	y = data_with_severity$severity,
-	n = 1000,
+	n = 5000,
 	variable = "severity (log2 scaled)",
 	limits = c(0, 40000)
 	)
@@ -653,6 +659,16 @@ posterior_pred_check(
 The "spikes" in the distribution are not as extreme as what is observed in the data. The black curve does not fall in the blue region in important areas of the distribution, namely the single peak. Thus, under the generative model the observed data is simply not probable in some regions of pure premium, which is an issue.
 
 Otherwise, the generative model at least has the right shape, for the most part. 
+
+```{r remove objects, include = FALSE}
+
+rm(
+	claim_count_posterior_pred, fit_poisson_gamma, pg_posterior_samples,
+	posterior_sev_samples_pg, simulate_pure_premium, simulate_severity
+	)
+
+```
+
 ## Model Revision - Switch Frequency to Negative Binomial
 
 We noticed in the previous section that the Poisson distribution does not account for as much variance as we would like. Indeed, the variance of the Poisson distribution is equal to its mean. 
@@ -744,6 +760,104 @@ nb_posterior_samples <- extract_and_get_posterior_samples(
 	X = X
 )
 
+dispersion_frequency_nb <- matrix(
+	nb_posterior_samples$dispersion_frequency,
+	nrow = length(nb_posterior_samples$dispersion_frequency),
+	ncol = nrow(data)
+)
+
 ```
 
 ## Posterior Predictive Check - Revision I
+
+We again simulate observations from the posterior predictive. 
+
+```{r}
+
+# Frequency
+set.seed(200350623)
+claim_count_posterior_pred_nb <- rnbinom(
+	n = length(nb_posterior_samples$frequency_samples),
+	mu = nb_posterior_samples$frequency_samples,
+	size = dispersion_frequency_nb
+	)
+
+dim(claim_count_posterior_pred_nb) <- dim(dispersion_frequency_nb)
+
+parameters_nb <- sample_weighted_gamma(
+	posterior_samples = nb_posterior_samples,
+	posterior_predictive_claim_counts = claim_count_posterior_pred_nb
+)
+
+# Severity
+set.seed(200350623)
+simulate_severity_nb <- rgamma(
+	n = length(parameters_nb$shapes),
+	shape = parameters_nb$shapes,
+	rate = parameters_nb$rates
+	)
+
+dim(simulate_severity_nb) <- dim(nb_posterior_samples$severity_samples)
+
+# Pure Premium
+simulate_pure_premium_nb <- (
+	claim_count_posterior_pred_nb / exp(nb_posterior_samples$exposures)
+	) * simulate_severity_nb
+
+```
+
+Next, complete the posterior predictive checks as before:
+
+```{r}
+
+results <- mapply(
+	posterior_pred_check,
+	posterior_predictive_samples = list(
+			claim_count_posterior_pred_nb,
+			simulate_severity_nb,
+			simulate_pure_premium_nb
+			),
+	y = list(
+			data_with_severity$claim_count,
+			data_with_severity$severity,
+			data_with_severity$observed_pp
+			),
+	variable = c(
+			"claims (log2 scaled)",
+			"severity (log2 scaled)",
+			"pure premium (log2 scaled)"
+			),
+	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
+	MoreArgs = list(n = 1000),
+	SIMPLIFY = FALSE
+	)
+
+```
+
+Finally:
+
+```{r, fig.align="center", fig.height=6, fig.width=10}
+
+(results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
+	title = "Posterior Predictive Check - Negative Binomial Frequency"
+)
+
+```
+Overall, the frequency distribution (claims) looks to be better modeled with a Negative Binomial,
+albeit marginally.
+
+The severity distribution still looks off, and as a result, the pure premium looks only
+marginally (if that) better than before.
+
+## Model Revision - Switch Severity to A More Heavy Tailed Distribution
+
+It looks like the current generative model gives too much density to small losses in general.
+That is, the proposed gamma distribution does not have heavy enough tails.
+
+There are many heavy tailed distributions that are worth looking at. 
+
+### Log-Normal
+
+
+
+
