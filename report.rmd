@@ -398,7 +398,7 @@ if (refit == TRUE) {
 This function extracts the required samples from the MCMC sampler.
 ```{r Helper Function For Extraction of Posterior Parameters}
 #' Extract the required mean/dispersion parameters for both candidate frequency
-#` and severity distributions.
+#` and severity distributions. 
 #'
 #' @param fitted_model A Stan fitted model (the result of rstan::sampling).
 #`	This model MUST have named parameters beta_frequency, beta_severity, 
@@ -408,7 +408,8 @@ This function extracts the required samples from the MCMC sampler.
 #' @param X The design matrix of rating variables
 #'
 #' @return A list containing matrices/vectors of posterior samples of the 
-#` required probability distributions.
+#` required probability distributions. Both frequency and severity parameter
+#` samples are returned on the predictor (not linked) scale.
 #' @export
 #'
 #' @examples 
@@ -442,12 +443,9 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 	}
 	
 	list(
-		frequency_samples = exp(
-			samples$beta_frequency %*% t(as.matrix.data.frame(X)) + exposure
-			),
-		severity_samples = exp(
-			samples$beta_severity %*% t(as.matrix.data.frame(X))
-			),
+		frequency_samples = samples$beta_frequency %*% t(as.matrix.data.frame(X)) + 
+			exposure,
+		severity_samples = samples$beta_severity %*% t(as.matrix.data.frame(X)),
 		dispersion_frequency_samples = dispersion_frequency_samples,
 		dispersion_severity_samples = dispersion_severity_samples,
 		exposures = exposure
@@ -464,6 +462,10 @@ pg_posterior_samples <- extract_and_get_posterior_samples(
 	exposures = data_with_severity$vehicle_exposure_years,
 	X = X
 )
+
+# Apply the link functions.
+pg_posterior_samples$frequency_samples <- exp(pg_posterior_samples$frequency_samples)
+pg_posterior_samples$severity_samples <- exp(pg_posterior_samples$severity_samples)
 ```
 
 ## Posterior Predictive Checks
@@ -539,13 +541,13 @@ dim(claim_count_posterior_pred) <- dim(pg_posterior_samples$frequency_samples)
 posterior_pred_check(
 	claim_count_posterior_pred,
 	y = data$claim_count,
-	n = 1000, 
-	"claims (log2 scaled)",
+	n = 3000, 
+	"claims (sqrt scaled)",
 	limits = c(0, 700)
 	)
 ```
 
-The blue curves represent 1000 simulated datasets generated from the posterior predictive.
+The blue curves represent 3000 simulated datasets generated from the posterior predictive.
 The black curve is the actual, observed dataset (in this, claim counts). Ideally,
 we want the black curve to fall **well** within the blue region as this implies
 that the actual, observed dataset is a likely realization under our generative model.
@@ -622,7 +624,7 @@ posterior_pred_check(
 	simulate_severity,
 	y = data_with_severity$severity,
 	n = 5000,
-	variable = "severity (log2 scaled)",
+	variable = "severity (sqrt scaled)",
 	limits = c(0, 40000)
 	)
 
@@ -649,8 +651,8 @@ simulate_pure_premium <- (
 posterior_pred_check(
 	simulate_pure_premium,
 	y = data_with_severity$observed_pp,
-	n = 1000,
-	variable = "pure premium (log2 scaled)",
+	n = 3000,
+	variable = "pure premium (sqrt scaled)",
 	limits = c(0, 4000)
 )
 
@@ -760,6 +762,9 @@ nb_posterior_samples <- extract_and_get_posterior_samples(
 	X = X
 )
 
+nb_posterior_samples$frequency_samples <- exp(nb_posterior_samples$frequency_samples)
+nb_posterior_samples$severity_samples <- exp(nb_posterior_samples$severity_samples)
+
 dispersion_frequency_nb <- matrix(
 	nb_posterior_samples$dispersion_frequency,
 	nrow = length(nb_posterior_samples$dispersion_frequency),
@@ -823,12 +828,12 @@ results <- mapply(
 			data_with_severity$observed_pp
 			),
 	variable = c(
-			"claims (log2 scaled)",
-			"severity (log2 scaled)",
-			"pure premium (log2 scaled)"
+			"claims (sqrt scaled)",
+			"severity (sqrt scaled)",
+			"pure premium (sqrt scaled)"
 			),
 	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
-	MoreArgs = list(n = 1000),
+	MoreArgs = list(n = 3000),
 	SIMPLIFY = FALSE
 	)
 
@@ -849,6 +854,18 @@ albeit marginally.
 The severity distribution still looks off, and as a result, the pure premium looks only
 marginally (if that) better than before.
 
+```{r include = FALSE}
+rm(
+	claim_count_posterior_pred_nb,
+	nb_posterior_samples, 
+	parameters_nb,
+	simulate_pure_premium,
+	simulate_severity_nb
+	)
+
+gc()
+```
+
 ## Model Revision - Switch Severity to A More Heavy Tailed Distribution
 
 It looks like the current generative model gives too much density to small losses in general.
@@ -856,8 +873,201 @@ That is, the proposed gamma distribution does not have heavy enough tails.
 
 There are many heavy tailed distributions that are worth looking at. 
 
-### Log-Normal
+### Log-normal
+
+The log-normal distribution is known to have heavier tails than the gamma distribution.
+
+Stan actually has a log-normal distribution built in. However, it is difficult to work with the log-normal distribution when linking the expected value of the log-normal with predictors (this is because the log-normal does not belong to the exponential dispersion family).
+
+Instead of using the log-normal distribution, we can instead log the severity random variable to get a Normal($\mu$, $\sigma$) random variable (assuming that the severity random variable is log-normal). We can then simulate directly from the log-normal distribution using the posterior parameters to get the posterior predictive of the original (assumed) log-normal severity random variable.
+
+```{r}
+data_list$severity <- ifelse(
+	data_with_severity$claim_count != 0,
+	log(data_with_severity$severity),
+	0
+)
+```
+
+The generative model is exactly the same as before, except now we replace $X_{i} \big | N_{i}, \phi, \eta_{i}$ with a log-normal that has parameters $R_{i}\beta, \frac{\sigma}{N_{i}}$.
+
+```{stan output.var="sm_nb_lognormal"}
+data {
+  int<lower=1> Nobs;
+  int<lower=1> Nvar;
+  matrix[Nobs, Nvar] X;
+  int<lower=0> claim_count[Nobs];
+  vector<lower=0>[Nobs] exposure;
+  vector[Nobs] severity; /*Note the change here - we removed the lower 
+  limit since now the severity can technically be < 0*/
+}
+
+parameters {
+  vector[Nvar] beta_frequency;
+  vector[Nvar] beta_severity;
+  real<lower=0> dispersion_severity;
+  real<lower=0> dispersion_frequency;
+}
+
+model {
+  
+  beta_frequency ~ normal(0, 5);
+  beta_severity ~ normal(0, 5);
+  dispersion_severity ~ cauchy(0, 8);
+  dispersion_frequency ~ cauchy(0, 8);
+  
+  claim_count ~ neg_binomial_2_log(
+  	X * beta_frequency + log(exposure), dispersion_frequency
+  );
+  
+  for (i in 1:Nobs) {
+    if (claim_count[i] != 0) {
+      severity[i] ~ normal(
+      	X[i] * beta_severity,
+      	(dispersion_severity / claim_count[i])^0.5
+      	);
+    }
+  }
+  
+}
+```
+
+Extracting the posterior samples:
+
+```{r}
+if (refit == TRUE) {
+	
+	fit_nb_lognormal <- sampling(
+		sm_nb_lognormal,
+		data = data_list,
+		chains = 6,
+		iter = 6000,
+		control = list(adapt_delta = 0.95),
+		seed = 200350623,
+		cores = 6,
+		verbose = TRUE
+		)
+
+	saveRDS(fit_nb_lognormal, "rds/fitted_nb_lognormal.rds")
+} else {
+	fit_nb_lognormal <- readRDS("rds/fitted_nb_lognormal.rds")
+}
+
+lognormal_sev_posterior_samples <- extract_and_get_posterior_samples(
+	fitted_model = fit_nb_lognormal,
+	exposures = data_with_severity$vehicle_exposure_years,
+	X = X 
+)
+
+# Just exponentiate the negative binomial here.
+lognormal_sev_posterior_samples$frequency_samples <- exp(
+	lognormal_sev_posterior_samples$frequency_samples
+	)
+```
+
+Simulating from the posterior predictive:
+
+```{r}
+
+# Frequency
+dispersion_frequency_nb <- matrix(
+	lognormal_sev_posterior_samples$dispersion_frequency,
+	nrow = length(lognormal_sev_posterior_samples$dispersion_frequency),
+	ncol = nrow(data)
+)
+
+set.seed(200350623)
+claim_count_posterior_pred_nb <- rnbinom(
+	n = length(lognormal_sev_posterior_samples$frequency_samples),
+	mu = lognormal_sev_posterior_samples$frequency_samples,
+	size = dispersion_frequency_nb
+	)
+
+dim(claim_count_posterior_pred_nb) <- dim(
+	lognormal_sev_posterior_samples$frequency_samples
+	)
+
+# Severity
+
+# First, calculate the normal standard deviations
+
+dispersion_severity_posterior <- matrix(
+		lognormal_sev_posterior_samples$dispersion_severity_samples,
+		nrow = nrow(lognormal_sev_posterior_samples$frequency_samples),
+		ncol = ncol(lognormal_sev_posterior_samples$frequency_samples)
+		)
+
+normal_sd <- (dispersion_severity_posterior / claim_count_posterior_pred_nb)^0.5
+
+# Doesn't matter what we set the sd to here since if we simulate 0 claim counts,
+# we simulate 0 claim payments. Set to 1 for convenience.
+normal_sd[is.infinite(normal_sd)] <- 1
+
+# Can now simulate as required
+set.seed(200350623)
+simulate_severity_ln <- rlnorm(
+	n = length(dispersion_severity_posterior),
+	mean = lognormal_sev_posterior_samples$severity_samples,
+	sd = normal_sd
+)
 
 
+dim(simulate_severity_ln) <- dim(
+	lognormal_sev_posterior_samples$severity_samples
+	)
 
+# If posterior predictive claim count is 0, then severity should be 0.
+simulate_severity_ln[claim_count_posterior_pred_nb == 0] <- 0
+```
 
+Simulating pure premiums:
+
+```{r}
+simulate_pure_premium_ln <- (
+	claim_count_posterior_pred_nb / exp(lognormal_sev_posterior_samples$exposures)
+	) * simulate_severity_ln
+```
+
+#### Posterior Predictive Check - Revision II
+
+```{r}
+results <- mapply(
+	posterior_pred_check,
+	posterior_predictive_samples = list(
+			claim_count_posterior_pred_nb,
+			simulate_severity_ln,
+			simulate_pure_premium_ln
+			),
+	y = list(
+			data_with_severity$claim_count,
+			data_with_severity$severity,
+			data_with_severity$observed_pp
+			),
+	variable = c(
+			"claims (sqrt scaled)",
+			"severity (sqrt scaled)",
+			"pure premium (sqrt scaled)"
+			),
+	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
+	MoreArgs = list(n = 3000),
+	SIMPLIFY = FALSE
+	)
+```
+
+Like before:
+
+```{r, fig.align="center", fig.height=6, fig.width=10}
+
+(results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
+	title = "Posterior Predictive Check - Log-normal Severity"
+)
+
+```
+
+The fit is a bit mixed. There is clearly more mass being put towards the tail
+and less towards small severity amounts, however the peak in the severity distribution is still not very plausible under the generative model and is arguably worse than the previous gamma model.
+
+The pure premium model looks better in some areas and slightly worse than others as a result.
+The region of highest density is being modeled a bit better than the gamma, but argubly worse than the gamma result at lower pure premium values.
+
+### Inverse-Gaussian
