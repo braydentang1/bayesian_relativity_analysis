@@ -630,11 +630,9 @@ posterior_pred_check(
 
 ```
 As we can see in this case, the generative model looks off here. The model underfits the most important areas of largest density (the large spike) and fails to account for uncertainty at higher and lower levels 
-of severity.
+of severity. 
 
-Unlike the frequency distribution, however, it is difficult to say if the gamma is simply inadequate here because this
-distribution is dependent on how well the frequency distribution is defined as well. Fixing the issues with the frequency distribution could yield improvements here. In addition, simply choosing a more right skewed
-distribution could be beneficial here.
+A major contributor to this is the fact that there is an unusual amount of density in the 31,000 region for severity. It turns out that this corresponds to a bunch of rating combinations with one or two claims and total payments in multiples of 31,442. This is likely an artifact that has been inserted in the data that is incredibly suspicious. However, these rating combinations receive such little weight in the fit due to the weighting scheme employed and therefore the overall impact of these large severity amounts should be mitigated. 
 
 Ultimately, however, the goal is the pure premium since our relativities are based
 on these quantities. 
@@ -733,8 +731,6 @@ model {
   
 }
 ```
-
-We again sample from the posterior distribution again:
 
 Now we sample from the posterior distribution as required:
 
@@ -868,10 +864,11 @@ gc()
 
 ## Model Revision - Switch Severity to A More Heavy Tailed Distribution
 
-It looks like the current generative model gives too much density to small losses in general.
-That is, the proposed gamma distribution does not have heavy enough tails.
+It looks like the current generative model gives too much density to small severity amounts, but also too much density to larger amounts. Therefore, if we switch to a heavy tailed distribution we might make the tails even heavier (and they are already too heavy) even though we may improve the fit for smaller severity amounts. 
 
-There are many heavy tailed distributions that are worth looking at. 
+Regardless, we can still explore these distributions and see how they compare.
+
+There are many heavy tailed distributions that have heavier tails than the gamma.
 
 ### Log-normal
 
@@ -1064,10 +1061,13 @@ Like before:
 
 ```
 
-The fit is a bit mixed. There is clearly more mass being put towards the tail
-and less towards small severity amounts, however the peak in the severity distribution is still not very plausible under the generative model and is arguably worse than the previous gamma model.
+The fit is mixed, as we expected. There is clearly more mass being put towards the tail
+and less towards small severity amounts which has improved the fit dramatically in this region. However, more density has been allocated to the larger severity amounts as a consequence which has made the generative model behave worse there.
 
 The pure premium model looks better in some areas and slightly worse than others as a result.
-The region of highest density is being modeled a bit better than the gamma, but argubly worse than the gamma result at lower pure premium values.
+The region of highest density is being modeled a bit better than the gamma, but arguably worse than the gamma result at lower pure premium values.
 
-### Inverse-Gaussian
+## Inverse-Gaussian
+
+The inverse-gaussian is even more heavier tailed when compared to the log-normal. This is likely going to be similar to the above log-normal, but even to a higher extreme.
+
