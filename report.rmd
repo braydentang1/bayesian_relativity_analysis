@@ -17,6 +17,7 @@ library(recipes)
 library(DT)
 library(kableExtra)
 library(prettydoc)
+library(statmod)
 library(patchwork)
 
 # CHANGE THIS BEFORE KNITING IF YOU WANT TO RERUN THE MCMC CHAINS.
@@ -88,8 +89,7 @@ knitr::kables(
 
 ```
 <br>
-Note that the vehicle described by the levels of each rating variable with relativities 1 (medium city & 50,001-100,000km) is the base class (in a linear model, this is the class described by the intercept). Relative to the base class, other vehicles have higher or lower premiums. The base class premium is multiplied by the corresponding relativities
-to derive the premiums for the other vehicle classes.
+Note that the vehicle described by the levels of each rating variable with relativities 1 (medium city & 50,001-100,000km) is the base class (in a linear model, this is the class described by the intercept). Relative to the base class, other vehicles have higher or lower premiums. The base class premium is multiplied by the corresponding relativities to derive the premiums for the other vehicle classes.
 
 For example, suppose the base class pure premium (the premium for a policyholder who drives in the medium city and has a vehicle with 50,001-100,000km) is $1000. Then, the pure premium for a policyholder who drives in the small city with a vehicle that has more than 100,000km of mileage has a pure premium of \$1000 * 0.95 * 1.378 = '\$1309.10.
 
@@ -121,17 +121,9 @@ we naturally will get more rows since there will be more unique combinations of 
 In fact, the number of rows will grow exponentially (see the curse of dimensionality).
 
 The consequences of this are dire. For one, model validation becomes very difficult.
-We can not naively split the aggregated dataset above because
-each row is unique. Therefore, any possible test set will contain unique combinations of
-rating variables that will be simply unobserved in the training set (and vice-versa).
+We can not naively split the dataset above because each row is unique. If we did, the model would be evaluated against combinations of rating variables that would be completely unseen in the training set, forcing the model to extrapolate (likely leading to poor predictions that aren't reflective of how the model would perform in reality). Furthermore, some rows in the test set would be aggregations of very few observations. Thus, models would be penalized heavily for poor predictions on rating combinations that are very rare. This is not as bad of an issue, however, since we can weight errors on each combination of rating variables by the number of exposures (for frequency) and number of claims (for severity), respectively.
 
-Second, feature selection (which is emphasized a lot in pricing since there is strong
-desire to have as simple of a rating algorithm as possible) and therefore, 
-model selection, is impossible. We cannot simply drop columns without affecting the number of rows. Thus,
-any sort of criteria based on the likelihood function (such as AIC/BIC/WAIC/LOO)
-are not viable since the likelihood function naturally scales with the data. In addition,
-since we cannot perform external validation we naturally cannot use wrapper based
-methods (like forward selection) that rely on held out datasets.
+Second, explicit feature selection (which is emphasized a lot in pricing since there are many business reasons to have as simple of a rating algorithm as possible), is impossible. We cannot simply drop columns without affecting the number of rows (and therefore, completely changing the dataset in the process). Therefore, fairly comparing models that have different underlying training datasets is not very clear.
 
 Third, each row will become more sparse as well due to the curse of dimensionality,
 with some combinations of rating variables simply having zero claims or exposures. Naturally, this will
@@ -263,8 +255,7 @@ In the Bayesian context, the variance is chosen based on our confidence that the
 effects of each level are non-zero, apriori. Alternatively, one can choose to use an
 empirical Bayes approach and tune this variance parameter using something like cross validation.
 This is equivalent to the typical machine learning approach - but in the Bayes context this isn't
-as feasible since Bayesian models using MCMC are slow. An alternative is to use a Bayesian
-estimate of out of sample log pointwise predictive density (ELPD) using importance sampling (counterfactuals of the loglikelihood), but this as mentioned earlier is a problem with our aggregated dataset.
+as feasible since Bayesian models fit using MCMC are slow. An alternative is to estimate the expected out of sample log pointwise predictive density (ELPD) using importance sampling (counterfactuals of the loglikelihood), which is faster than true cross validation (since there is no actual data splitting) but still perhaps too slow.
 
 Regardless, the Bayesian model allows us to use regularization while still remaining
 completely probabilistic. This will pay off when we look at relativities.
@@ -272,21 +263,14 @@ completely probabilistic. This will pay off when we look at relativities.
 ### Predictive Performance
 
 The other main issue involved the issue of model validation in terms of predictive 
-performance. We cannot just naively split the dataset nor can we use likelihood based 
-evaluation metrics, like ELPD (since the dataset has rows as a function of the number of columns).
+performance. We cannot just naively split the dataset, because each row represents a unique 
+combination of rating variables.
 
-Unfortunately, I still haven't figured out a great way to solve this issue. The
-only alternative may be to perform posterior predictive checks, but these are known
-to be biased for predictive performance because this involves in-sample data (despite its name).
-Posterior predictive checks are mainly used for assessing the in-sample fit of a generative model
-to the data.
+We can, however, use likelihood based evaluation metrics if we are comparing models fit with the same underlying dataset (among other caveats like having the same raw target variable and avoiding comparisons between discrete and continuous distributions). One such metric is the aforementioned leave one out estimate of ELPD, which produces counterfactuals of the loglikelihood under scenarios where one observation at a time is excluded from the dataset (so that each resulting loglikelihood can be evaluated at the held out data point, simulating cross validation). However, just like true data splitting this still suffers from the same problem of each row being a unique combination of rating variables. Thus, the ELPD on the held out rating combination will be estimated through extrapolation, which is not true to how the model will behave in reality.
 
-However, because we are providing full distributional predictions an argument
-can be made that naturally, the model (when correctly specified) will at least have the 
-ability to give an interval of the true, underlying relativity for a future
-policyholder. While the model may still not assign a high mass to the true underlying relativity
-in some cases (which, if we had the ideal dataset we could detect this) an argument could be made
-that the true relativity was at least a possibility described by the model (say in a credible interval), something other traditional frequentist/machine learning methodologies do not have.
+Unfortunately, I still haven’t figured out a great way to solve this issue. The only alternative may be to perform posterior predictive checks, but these are known to be biased for predictive performance because this involves in-sample data (despite its name). Posterior predictive checks are mainly used for assessing the in-sample fit of a generative model to the data.
+
+However, because we are providing full distributional predictions an argument can be made that naturally, the model (when correctly specified) will at least have the ability to give an interval of the true, underlying relativity for a future policyholder. While the model may still not assign a high mass to the true underlying relativity in some cases (which, if we had the ideal dataset we could detect this) an argument could be made that the true relativity was at least a possibility described by the model (say in a credible interval), something other traditional frequentist/machine learning methodologies do not have.
 
 ## Stan Code
 
@@ -323,7 +307,7 @@ model {
     if (claim_count[i] != 0) {
       severity[i] ~ gamma(
       	claim_count[i] / dispersion_severity,
-      	claim_count[i] / (exp(X[i] * beta_severity) * dispersion_severity)
+      	claim_count[i] / (exp(X[i, ] * beta_severity) * dispersion_severity)
       	);
     }
   }
@@ -724,7 +708,7 @@ model {
     if (claim_count[i] != 0) {
       severity[i] ~ gamma(
       	claim_count[i] / dispersion_severity,
-      	claim_count[i] / (exp(X[i] * beta_severity) * dispersion_severity)
+      	claim_count[i] / (exp(X[i, ] * beta_severity) * dispersion_severity)
       	);
     }
   }
@@ -737,6 +721,7 @@ Now we sample from the posterior distribution as required:
 ```{r Sample from Posterior - NB/Gamma}
 
 if (refit == TRUE) {
+	
 	fit_nb_gamma <- sampling(
 		nb_gamma,
 		data = data_list,
@@ -886,7 +871,7 @@ data_list$severity <- ifelse(
 )
 ```
 
-The generative model is exactly the same as before, except now we replace $X_{i} \big | N_{i}, \phi, \eta_{i}$ with a log-normal that has parameters $R_{i}\beta, \frac{\sigma}{N_{i}}$.
+The generative model is exactly the same as before, except now we replace $X_{i} \big | N_{i}, \phi, \eta_{i}$ with a log-normal that has parameters $R_{i}\beta, \frac{\sigma}{N_{i}^{0.5}}$.
 
 ```{stan output.var="sm_nb_lognormal"}
 data {
@@ -896,7 +881,7 @@ data {
   int<lower=0> claim_count[Nobs];
   vector<lower=0>[Nobs] exposure;
   vector[Nobs] severity; /*Note the change here - we removed the lower 
-  limit since now the severity can technically be < 0*/
+  limit since now the severity can technically be < 0 now when logged */
 }
 
 parameters {
@@ -920,7 +905,7 @@ model {
   for (i in 1:Nobs) {
     if (claim_count[i] != 0) {
       severity[i] ~ normal(
-      	X[i] * beta_severity,
+      	X[i, ] * beta_severity,
       	(dispersion_severity / claim_count[i])^0.5
       	);
     }
@@ -965,7 +950,6 @@ lognormal_sev_posterior_samples$frequency_samples <- exp(
 Simulating from the posterior predictive:
 
 ```{r}
-
 # Frequency
 dispersion_frequency_nb <- matrix(
 	lognormal_sev_posterior_samples$dispersion_frequency,
@@ -1007,7 +991,6 @@ simulate_severity_ln <- rlnorm(
 	mean = lognormal_sev_posterior_samples$severity_samples,
 	sd = normal_sd
 )
-
 
 dim(simulate_severity_ln) <- dim(
 	lognormal_sev_posterior_samples$severity_samples
@@ -1067,7 +1050,217 @@ and less towards small severity amounts which has improved the fit dramatically 
 The pure premium model looks better in some areas and slightly worse than others as a result.
 The region of highest density is being modeled a bit better than the gamma, but arguably worse than the gamma result at lower pure premium values.
 
+```{r include = FALSE}
+rm(
+	fit_nb_lognormal, claim_count_posterior_pred_nb, dispersion_frequency_nb,
+	dispersion_severity_posterior, lognormal_sev_posterior_samples,
+	normal_sd, poisson_gamma_model, results, simulate_severity_ln,
+	simulate_pure_premium_ln, simulate_pure_premium_nb
+	)
+
+```
+
 ## Inverse-Gaussian
 
-The inverse-gaussian is even more heavier tailed when compared to the log-normal. This is likely going to be similar to the above log-normal, but even to a higher extreme.
+The inverse-gaussian is even more heavier tailed when compared to the log-normal. This is likely going to be similar to the above log-normal, but even to a higher extreme. 
+
+This requires writing a custom Stan function since the inverse-gaussian is not actually implemented natively in Stan.
+
+```{stan output.var="sm_nb_ig"}
+functions {
+
+/* This is just the observed loglikelihood of the IG, with additive constants
+removed */
+
+	real IG_lpdf (real x, real mu, real lambda) {
+	
+		real lprob;
+		
+		if (!(x > 0)) {
+			reject("x must be strictly greater than 0");
+		} 
+		
+		if (!(mu > 0)) {
+			reject("mu must be strictly greater than 0");
+		} 
+		
+		if (!(lambda > 0)) {
+			reject("lambda must be strictly greater than 0");
+		}	
+		
+		lprob = 0.5 * log(lambda) - (lambda * (x-mu)^2/(2 * mu^2 * x));
+		return lprob;
+	}
+}
+
+data {
+  int<lower=1> Nobs;
+  int<lower=1> Nvar;
+  matrix[Nobs, Nvar] X;
+  int<lower=0> claim_count[Nobs];
+  vector<lower=0>[Nobs] exposure;
+  vector<lower=0>[Nobs] severity;
+}
+
+parameters {
+  vector[Nvar] beta_frequency;
+  vector[Nvar] beta_severity;
+  real<lower=0> dispersion_severity;
+  real<lower=0> dispersion_frequency;
+}
+
+model {
+  
+  beta_frequency ~ normal(0, 5);
+  beta_severity ~ normal(0, 5);
+  dispersion_severity ~ cauchy(0, 8);
+  dispersion_frequency ~ cauchy(0, 8);
+  
+  claim_count ~ neg_binomial_2_log(
+  	X * beta_frequency + log(exposure), dispersion_frequency
+  );
+  
+  for (i in 1:Nobs) {
+    if (claim_count[i] != 0) {
+      target += IG_lpdf(
+      	severity[i] | exp(X[i, ] * beta_severity), 
+      	claim_count[i] / dispersion_severity
+      	);
+    } 
+  }
+  
+}
+```
+
+Extracting posterior samples like before:
+
+```{r}
+# Change the severity variable back to the original, non-logged version.
+data_list$severity <- data_with_severity$severity
+
+if (refit == TRUE) {
+	
+	fit_nb_IG <- sampling(
+		sm_nb_ig,
+		data = data_list,
+		chains = 6,
+		iter = 6000,
+		control = list(adapt_delta = 0.95),
+		seed = 200350623,
+		cores = 6,
+		verbose = TRUE
+		)
+
+	saveRDS(fit_nb_IG, "rds/fitted_nb_IG.rds")
+} else {
+	fit_nb_IG <- readRDS("rds/fitted_nb_IG.rds")
+}
+
+IG_sev_posterior_samples <- extract_and_get_posterior_samples(
+	fitted_model = fit_nb_IG,
+	exposures = data_with_severity$vehicle_exposure_years,
+	X = X 
+)
+
+# Exponentiate the means to get the scalar parameters
+IG_sev_posterior_samples$frequency_samples <- exp(
+	IG_sev_posterior_samples$frequency_samples
+	)
+
+IG_sev_posterior_samples$severity_samples <- exp(
+	IG_sev_posterior_samples$severity_samples
+)
+```
+
+Again, simulating from the posterior predictive distributions:
+
+```{r}
+# Frequency
+dispersion_frequency_nb <- matrix(
+	IG_sev_posterior_samples$dispersion_frequency,
+	nrow = length(IG_sev_posterior_samples$dispersion_frequency),
+	ncol = nrow(data)
+)
+
+set.seed(200350623)
+claim_count_posterior_pred_nb <- rnbinom(
+	n = length(IG_sev_posterior_samples$frequency_samples),
+	mu = IG_sev_posterior_samples$frequency_samples,
+	size = dispersion_frequency_nb
+	)
+
+dim(claim_count_posterior_pred_nb) <- dim(
+	IG_sev_posterior_samples$frequency_samples
+	)
+
+# Severity
+
+# lambda parameter
+dispersion_severity_posterior <- matrix(
+		IG_sev_posterior_samples$dispersion_severity_samples,
+		nrow = nrow(IG_sev_posterior_samples$frequency_samples),
+		ncol = ncol(IG_sev_posterior_samples$frequency_samples)
+		)
+
+# Note: like with the gamma, in this case if we have 0 claims then we get
+# a lambda of 0. This is fine as the inverse_gaussian with 0 = lambda returns 0
+# w.p. 1, regardless of mean.
+lambda <- claim_count_posterior_pred_nb / dispersion_severity_posterior
+
+# Simulate from severity as normal 
+set.seed(200350623)
+simulate_severity_IG <- rinvgauss(
+	n = length(dispersion_severity_posterior),
+	mean = IG_sev_posterior_samples$severity_samples,
+	shape = lambda
+)
+
+dim(simulate_severity_IG) <- dim(
+	IG_sev_posterior_samples$severity_samples
+	)
+
+simulate_pure_premium_IG <- (
+	claim_count_posterior_pred_nb / exp(IG_sev_posterior_samples$exposures)
+	) * simulate_severity_IG
+```
+
+#### Posterior Predictive Check - Revision III
+
+```{r}
+results <- mapply(
+	posterior_pred_check,
+	posterior_predictive_samples = list(
+			claim_count_posterior_pred_nb,
+			simulate_severity_IG,
+			simulate_pure_premium_IG
+			),
+	y = list(
+			data_with_severity$claim_count,
+			data_with_severity$severity,
+			data_with_severity$observed_pp
+			),
+	variable = c(
+			"claims (sqrt scaled)",
+			"severity (sqrt scaled)",
+			"pure premium (sqrt scaled)"
+			),
+	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
+	MoreArgs = list(n = 3000),
+	SIMPLIFY = FALSE
+	)
+```
+
+Like before:
+
+```{r, fig.align="center", fig.height=6, fig.width=10}
+
+(results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
+	title = "Posterior Predictive Check - Inverse-gaussian Severity"
+)
+
+```
+Overall, the fit looks surprisingly better than the lognormal and overall, looks to be the best fitting model out of everything that has been tried up to this point. The resulting posterior predictive distribution of the pure premium looks to allow for the observed pure premiums at nearly every range of pure premium.  
+
+### The Random Crossed Effects Model
+
 
