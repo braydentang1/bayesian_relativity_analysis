@@ -439,6 +439,7 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 ```
 
 We now extract the posterior samples.
+
 ```{r Extract Posterior Samples}
 # Extract the samples for the Poisson-Gamma model.
 pg_posterior_samples <- extract_and_get_posterior_samples(
@@ -1060,7 +1061,7 @@ rm(
 
 ```
 
-## Inverse-Gaussian
+### Inverse-Gaussian
 
 The inverse-gaussian is even more heavier tailed when compared to the log-normal. This is likely going to be similar to the above log-normal, but even to a higher extreme. 
 
@@ -1259,8 +1260,9 @@ Like before:
 )
 
 ```
+
 Overall, the fit looks surprisingly better than the lognormal and overall, looks to be the best fitting model out of everything that has been tried up to this point. The resulting posterior predictive distribution of the pure premium looks to allow for the observed pure premiums at nearly every range of pure premium.  
 
-### The Random Crossed Effects Model
+## The Random Crossed Effects Model
 
 
