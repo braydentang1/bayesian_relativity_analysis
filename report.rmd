@@ -7,6 +7,9 @@ output:
     theme: tactile
     highlight: github
     toc: true
+editor_options: 
+  markdown: 
+    wrap: 72
 ---
 
 ```{r setup, include=FALSE}
@@ -25,41 +28,56 @@ refit <- FALSE
 ```
 
 ## Some Context
-I am not an actuarial student (anymore) but I recently completed a typical
-pricing assignment as part of an evaluation for a job application.
-I didn't end up applying, however I enjoyed having a familiar (and fake) kind
-of dataset that I used to work with all the time in my past life. I wanted to see
-if I could get around some of the issues I had with these kinds of datasets
-from three years ago.
 
-The objective of actuarial relativity analysis is, at a high level, to most 
-accurately predict the pure premium as closely as possible for all combinations of rating variables. The pure premium is the amount of money needed, on average, that is required to cover the cost of
-claims only (so no profit allocations or expenses). Rating variables are simply policyholder characteristics (such as the amount of kilometers on a vehicle, age of the policyholder, color of the vehicle, engine size, etc.)
+I am not an actuarial student (anymore) but I recently completed a
+typical pricing assignment as part of an evaluation for a job
+application. I didn't end up applying, however I enjoyed having a
+familiar (and fake) kind of dataset that I used to work with all the
+time in my past life. I wanted to see if I could get around some of the
+issues I had with these kinds of datasets from three years ago.
+
+The objective of actuarial relativity analysis is, at a high level, to
+most accurately predict the pure premium as closely as possible for all
+combinations of rating variables. The pure premium is the amount of
+money needed, on average, that is required to cover the cost of claims
+only (so no profit allocations or expenses). Rating variables are simply
+policyholder characteristics (such as the amount of kilometers on a
+vehicle, age of the policyholder, color of the vehicle, engine size,
+etc.)
 
 Naturally, pure premium is expressed simply as the rate at which a risk
-makes any kind of claim multiplied by the average amount per each claim. Thus, pure premium
-is defined as: 
+makes any kind of claim multiplied by the average amount per each claim.
+Thus, pure premium is defined as:
 
-$$ \text{frequency} \times \text{severity} = \frac{\text{total claim counts}}{\text{total risks = exposures}} \times \frac{\text{total claim amounts (losses)}}{\text{total claim counts}} $$ 
+$$ \text{frequency} \times \text{severity} = \frac{\text{total claim counts}}{\text{total risks = exposures}} \times \frac{\text{total claim amounts (losses)}}{\text{total claim counts}} $$
 
 $$ = \frac{\text{total claim amounts (losses)}}{\text{total risks}}.$$
 
-We can model either the frequency and severity distributions separately, or we 
-can model pure premium directly. The former approach is often preferred as 
-it offers more flexibility and is at least logically, more robust. 
+We can model either the frequency and severity distributions separately,
+or we can model pure premium directly. The former approach is often
+preferred as it offers more flexibility and is at least logically, more
+robust.
 
 ## Relativities
 
-Relativities are simply the marginal impact a particular rating variable has on the
-response. This has the exact same interpretation as regression coefficients do
-in a multivariate linear model - holding all other variables constant, the regression
-coefficient represents the change in some quantity (say, the change in the log of severity or
-the log of frequency) per some change in said rating variable. 
+Relativities are simply the marginal impact a particular rating variable
+has on the response. This has the exact same interpretation as
+regression coefficients do in a multivariate linear model - holding all
+other variables constant, the regression coefficient represents the
+change in some quantity (say, the change in the log of severity or the
+log of frequency) per some change in said rating variable.
 
-Relativities are typically calculated by predicting pure premiums across all of the levels of a particular rating variable, while simultaneously holding all of the other rating variables constant at the levels of some chosen base class. The base class represents one specific combination of rating variables that all other classes are compared against. Other combinations of rating variables are more risky (higher pure premium) or less risky (lower pure premium), **relative** to this base class.
+Relativities are typically calculated by predicting pure premiums across
+all of the levels of a particular rating variable, while simultaneously
+holding all of the other rating variables constant at the levels of some
+chosen base class. The base class represents one specific combination of
+rating variables that all other classes are compared against. Other
+combinations of rating variables are more risky (higher pure premium) or
+less risky (lower pure premium), **relative** to this base class.
 
-Thus, each predicted pure premium is divided by the predicted pure premium of the relevant level from the base class to
-obtain these relativities.
+Thus, each predicted pure premium is divided by the predicted pure
+premium of the relevant level from the base class to obtain these
+relativities.
 
 ```{r relativities, echo = FALSE}
 
@@ -88,10 +106,20 @@ knitr::kables(
 	kable_styling() 
 
 ```
-<br>
-Note that the vehicle described by the levels of each rating variable with relativities 1 (medium city & 50,001-100,000km) is the base class (in a linear model, this is the class described by the intercept). Relative to the base class, other vehicles have higher or lower premiums. The base class premium is multiplied by the corresponding relativities to derive the premiums for the other vehicle classes.
 
-For example, suppose the base class pure premium (the premium for a policyholder who drives in the medium city and has a vehicle with 50,001-100,000km) is $1000. Then, the pure premium for a policyholder who drives in the small city with a vehicle that has more than 100,000km of mileage has a pure premium of \$1000 * 0.95 * 1.378 = '\$1309.10.
+<br> Note that the vehicle described by the levels of each rating
+variable with relativities 1 (medium city & 50,001-100,000km) is the
+base class (in a linear model, this is the class described by the
+intercept). Relative to the base class, other vehicles have higher or
+lower premiums. The base class premium is multiplied by the
+corresponding relativities to derive the premiums for the other vehicle
+classes.
+
+For example, suppose the base class pure premium (the premium for a
+policyholder who drives in the medium city and has a vehicle with
+50,001-100,000km) is \$1000. Then, the pure premium for a policyholder
+who drives in the small city with a vehicle that has more than 100,000km
+of mileage has a pure premium of \$1000 \* 0.95 \* 1.378 = '\$1309.10.
 
 ## The Dataset
 
@@ -108,176 +136,276 @@ data %>%
 	formatRound(columns = 6:7, digits = 0)
 
 ```
-<br>
-As is typical, one row represents one unique combination of rating variables, 
-containing the total number of claims observed, amount of exposures (i.e. number of risks,
-which is typically defined as the amount of policy earned over a period of one year) and
-the total amount of claim payments. 
 
-While this dataset seems straightforward, it is deceivingly difficult to work with when compared to 
-other more standard datasets. This is primarily due to the aggregation which causes rows and
-columns to be dependent. If we add more rating variables (which are columns) to the dataset, 
-we naturally will get more rows since there will be more unique combinations of rating variables. 
-In fact, the number of rows will grow exponentially (see the curse of dimensionality).
+<br> As is typical, one row represents one unique combination of rating
+variables, containing the total number of claims observed, amount of
+exposures (i.e. number of risks, which is typically defined as the
+amount of policy earned over a period of one year) and the total amount
+of claim payments.
 
-The consequences of this are dire. For one, model validation becomes very difficult.
-We can not naively split the dataset above because each row is unique. If we did, the model would be evaluated against combinations of rating variables that would be completely unseen in the training set, forcing the model to extrapolate (likely leading to poor predictions that aren't reflective of how the model would perform in reality). Furthermore, some rows in the test set would be aggregations of very few observations. Thus, models would be penalized heavily for poor predictions on rating combinations that are very rare. This is not as bad of an issue, however, since we can weight errors on each combination of rating variables by the number of exposures (for frequency) and number of claims (for severity), respectively.
+While this dataset seems straightforward, it is deceivingly difficult to
+work with when compared to other more standard datasets. This is
+primarily due to the aggregation which causes rows and columns to be
+dependent. If we add more rating variables (which are columns) to the
+dataset, we naturally will get more rows since there will be more unique
+combinations of rating variables. In fact, the number of rows will grow
+exponentially (see the curse of dimensionality).
 
-Second, explicit feature selection (which is emphasized a lot in pricing since there are many business reasons to have as simple of a rating algorithm as possible), is impossible. We cannot simply drop columns without affecting the number of rows (and therefore, completely changing the dataset in the process). Therefore, fairly comparing models that have different underlying training datasets is not very clear.
+The consequences of this are dire. For one, model validation becomes
+very difficult. We can not naively split the dataset above because each
+row is unique. If we did, the model would be evaluated against
+combinations of rating variables that would be completely unseen in the
+training set, forcing the model to extrapolate (likely leading to poor
+predictions that aren't reflective of how the model would perform in
+reality). Furthermore, some rows in the test set would be aggregations
+of very few observations. Thus, models would be penalized heavily for
+poor predictions on rating combinations that are very rare. This is not
+as bad of an issue, however, since we can weight errors on each
+combination of rating variables by the number of exposures (for
+frequency) and number of claims (for severity), respectively.
 
-Third, each row will become more sparse as well due to the curse of dimensionality,
-with some combinations of rating variables simply having zero claims or exposures. Naturally, this will
-lead to ill-defined models - the traditional gamma won't work, for example, since
-we will have exact zero losses. In the case of frequency distributions, there
-may also be particular levels of a rating variable that simply have zero exposures.
-This typically arises when a particular level that originally had some exposures many years ago decreases
-over time to the point where it no longer has any exposures (suppose a vehicle color simply ceases to exist within a book of business). Normally, this level can simply be dropped, but
-what happens when all of a sudden the exposure reappears in the future? Our data 
-is a single realization of some reality, but there is of course **uncertainty**.
-It could be by pure chance that we observed zero exposures.
+Second, explicit feature selection (which is emphasized a lot in pricing
+since there are many business reasons to have as simple of a rating
+algorithm as possible), is impossible. We cannot simply drop columns
+without affecting the number of rows (and therefore, completely changing
+the dataset in the process). Therefore, fairly comparing models that
+have different underlying training datasets is not very clear.
 
-Another solution to the above problem is to group the sparse level of the rating
-variable with another to remove this sparsity. This seems harmless, but in reality
-this corresponds to a deceivingly strong prior, namely that the
-effects of each level on the response are the same. In math, this corresponds to setting $\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some number very close to 0, and $\beta_{1}, \beta_{2}$ are the effects of the two separate levels being grouped. See [this video](https://www.youtube.com/watch?v=BKumW2RfSoQ&ab_channel=Stan) for more details. Regardless, grouping levels of rating variables together is a very strong prior that
-is not at all transparent. Rather than doing this, we can use mixed effects/hierarchical models to achieve partial pooling, which is far more flexible and robust.
+Third, each row will become more sparse as well due to the curse of
+dimensionality, with some combinations of rating variables simply having
+zero claims or exposures. Naturally, this will lead to ill-defined
+models - the traditional gamma won't work, for example, since we will
+have exact zero losses. In the case of frequency distributions, there
+may also be particular levels of a rating variable that simply have zero
+exposures. This typically arises when a particular level that originally
+had some exposures many years ago decreases over time to the point where
+it no longer has any exposures (suppose a vehicle color simply ceases to
+exist within a book of business). Normally, this level can simply be
+dropped, but what happens when all of a sudden the exposure reappears in
+the future? Our data is a single realization of some reality, but there
+is of course **uncertainty**. It could be by pure chance that we
+observed zero exposures.
+
+Another solution to the above problem is to group the sparse level of
+the rating variable with another to remove this sparsity. This seems
+harmless, but in reality this corresponds to a deceivingly strong prior,
+namely that the effects of each level on the response are the same. In
+math, this corresponds to setting
+$\beta_{1} - \beta_{2} \sim N(0, 2\epsilon)$ where $\epsilon$ is some
+number very close to 0, and $\beta_{1}, \beta_{2}$ are the effects of
+the two separate levels being grouped. See [this
+video](https://www.youtube.com/watch?v=BKumW2RfSoQ&ab_channel=Stan) for
+more details. Regardless, grouping levels of rating variables together
+is a very strong prior that is not at all transparent. Rather than doing
+this, we can use mixed effects/hierarchical models to achieve partial
+pooling, which is far more flexible and robust.
 
 ### Aside: The Ideal Dataset
 
-The ideal dataset, at least hypothetically, would be a dataset where one row is 
-equal to one policyholder. The total number of earned exposures for the policyholder
-would be one column, and the total claim counts and total claim costs (for that
-policyholder) would be additional columns (from which we could model). The rating
-variables relevant for that policyholder would then be represented as additional
-columns.
+The ideal dataset, at least hypothetically, would be a dataset where one
+row is equal to one policyholder. The total number of earned exposures
+for the policyholder would be one column, and the total claim counts and
+total claim costs (for that policyholder) would be additional columns
+(from which we could model). The rating variables relevant for that
+policyholder would then be represented as additional columns.
 
-This would secure independence between the number of rating variables used
-and the number of rows. To obtain relativities, the aggregated dataset could be recreated
-(that is, one row is equal to one unique combination of exposures) from which we could then make our predictions of frequency and severity using our trained model (that was trained on the policyholder data). The model
-predicts it's best guess of $E[Y | X = \text{rating variables}]$ learned over all
-observed policyholders.
+This would secure independence between the number of rating variables
+used and the number of rows. To obtain relativities, the aggregated
+dataset could be recreated (that is, one row is equal to one unique
+combination of exposures) from which we could then make our predictions
+of frequency and severity using our trained model (that was trained on
+the policyholder data). The model predicts it's best guess of
+$E[Y | X = \text{rating variables}]$ learned over all observed
+policyholders.
 
 ## Post-Adjustments
 
-The model is not perfect and there is an acceptance that the models may be overfit
-to the data, leading to relativites that are not reflective of the actual relativites.
-This often leads to actuaries manually adjusting relativites to be more in line
-with what their apriori beliefs are. For example, a vehicle with a larger engine would
-be expected to be of higher risk than a vehicle with a smaller engine since presumably
-the vehicles with larger engines are more expensive on average. Sometimes, the 
-relativities produced do not reflect this and so an actuary may decide to "manually"
-adjust the values to smooth said estimates. This is often done out of respect for the
-customer who may not appreciate being charged more in premium when they perceive
-themselves as lower risk. Depending on the actuary, they may just adjust relativities that are not monotonic. 
+The model is not perfect and there is an acceptance that the models may
+be overfit to the data, leading to relativites that are not reflective
+of the actual relativites. This often leads to actuaries manually
+adjusting relativites to be more in line with what their apriori beliefs
+are. For example, a vehicle with a larger engine would be expected to be
+of higher risk than a vehicle with a smaller engine since presumably the
+vehicles with larger engines are more expensive on average. Sometimes,
+the relativities produced do not reflect this and so an actuary may
+decide to "manually" adjust the values to smooth said estimates. This is
+often done out of respect for the customer who may not appreciate being
+charged more in premium when they perceive themselves as lower risk.
+Depending on the actuary, they may just adjust relativities that are not
+monotonic.
 
-While this approach may sound sketchy, I believe there may actually be merit to it
-in the sense that the relationship that is expected, or, a reasonable compromise to the prior belief
-**is** actually in the data once we consider the amount of uncertainty that exists within the data. This is 
-essentially what this manual adjustment is trying to account for, accepting that
-the data has some degree of noise and may not be fully reliable. 
+While this approach may sound sketchy, I believe there may actually be
+merit to it in the sense that the relationship that is expected, or, a
+reasonable compromise to the prior belief **is** actually in the data
+once we consider the amount of uncertainty that exists within the data.
+This is essentially what this manual adjustment is trying to account
+for, accepting that the data has some degree of noise and may not be
+fully reliable.
 
-However, the adjustment is arbitrary if we do not actually know how much uncertainty we are 
-dealing with. In the case of traditional pricing modeling, it is difficult to actually
-quantify how much uncertainty we are dealing with because the frequency and severity
-models are estimated completely independently of each other. The expectations produced
-by each individual model are used to produce the pure premiums, which are then used to 
-calculate relativities. 
+However, the adjustment is arbitrary if we do not actually know how much
+uncertainty we are dealing with. In the case of traditional pricing
+modeling, it is difficult to actually quantify how much uncertainty we
+are dealing with because the frequency and severity models are estimated
+completely independently of each other. The expectations produced by
+each individual model are used to produce the pure premiums, which are
+then used to calculate relativities.
 
-However, it is clear that if we view frequency and severity as random variables
-that they are not independent. If we have a zero frequency, we must have a zero severity (or equivalently,
-if we have observed claims we must have non-zero severity, assuming that claims 
-below a deductible are ignored). Estimating both models separately ignores this.
+However, it is clear that if we view frequency and severity as random
+variables that they are not independent. If we have a zero frequency, we
+must have a zero severity (or equivalently, if we have observed claims
+we must have non-zero severity, assuming that claims below a deductible
+are ignored). Estimating both models separately ignores this.
 
-Viewing frequency and severity as random variables, and as a consequence, viewing pure premiums
-and relativities as random variables, is where Bayesian modeling will allow us
-to quantify the full amount of uncertainty in our data. This will allow actuaries to actually
-choose reasonable values that are in line with the amount of uncertainty that they
-have apriori and within the data. In addition, it allows actuaries to quantify 
-their confidence in allowing for a non-monotonic relativity, giving them the ability
-to defend any non-monotonic relativities.
+Viewing frequency and severity as random variables, and as a
+consequence, viewing pure premiums and relativities as random variables,
+is where Bayesian modeling will allow us to quantify the full amount of
+uncertainty in our data. This will allow actuaries to actually choose
+reasonable values that are in line with the amount of uncertainty that
+they have apriori and within the data. In addition, it allows actuaries
+to quantify their confidence in allowing for a non-monotonic relativity,
+giving them the ability to defend any non-monotonic relativities.
 
 ## The Bayesian/Generative Model
 
 I describe the fully generative model below:
 
-Let $X$ be the severity random variable, $R_{i}$ be the rating variables,
-and $N$ be the claim counts. Assume that exposures are a known constant. 
+Let $X$ be the severity random variable, $R_{i}$ be the rating
+variables, and $N$ be the claim counts. Assume that exposures are a
+known constant.
 
-Then, for the ith unique combination of rating variables, $\forall i \ X_{i} > 0$ let:
+Then, for the ith unique combination of rating variables,
+$\forall i \ X_{i} > 0$ let:
 
 $$X_{i} \big|N_{i}, \phi, \eta_{i} \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right),$$
 
 $$\eta_{i} \big| \beta, R_{i} = exp(R_{i} \times \beta),$$
 $$N_{i} \big|\lambda_{i} \sim Poisson(\lambda_{i}),$$
 $$\lambda_{i} \big|\psi, R_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
-$$\beta \sim Normal(0, \tau),$$
+$$\beta \sim Normal(0, \tau),$$ 
 $$\psi \sim Normal(0, \omega),$$
-$$\phi \sim \text{Half-Cauchy}(0, \alpha).$$
-Note that $\alpha, \tau, \omega$ are constants that must be specified by the user.
-In addition, note that $$E[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{\eta_{i} \times \phi}{N_{i}} = \eta_{i}$$ but $$Var[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{\eta_{i}^2 \times \phi^2}{N_{i}^2} = \frac{\eta_{i}^2 \times \phi}{N_{i}}.$$
+$$\phi \sim \text{Half-Cauchy}(0, \alpha).$$ Note that
+$\alpha, \tau, \omega$ are constants that must be specified by the user.
+In addition, note that
+$$E[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{\eta_{i} \times \phi}{N_{i}} = \eta_{i}$$
+but
+$$Var[X_{i} \big |N_{i}, \phi, \eta_{i}] = \frac{N_{i}}{\phi} \times \frac{\eta_{i}^2 \times \phi^2}{N_{i}^2} = \frac{\eta_{i}^2 \times \phi}{N_{i}}.$$
 
-That is, as the number of claims that makes up a severity calculation increases,
-the lower the variance of the resulting severity distribution for the particular
-combination of rating variables. Equivalently, the more claims for a particular 
-combination of rating variables, the more influence that particular combination
-of rating variables has on the overall model fit. This is pretty much the same
-thing as using weights in a gamma generalized linear model, however, in this case
-the weights are also random variables and everything is modeled simultaneously.
+That is, as the number of claims that makes up a severity calculation
+increases, the lower the variance of the resulting severity distribution
+for the particular combination of rating variables. Equivalently, the
+more claims for a particular combination of rating variables, the more
+influence that particular combination of rating variables has on the
+overall model fit. This is pretty much the same thing as using weights
+in a gamma generalized linear model, however, in this case the weights
+are also random variables and everything is modeled simultaneously.
 
-It follows that $$X_{i} \times \frac{N_{i}}{\text{number of exposures for ith combination}} = P_{i},$$ where 
-$P_{i}$ is the pure premium for the ith combination of rating variables, is also a random variable. Since
-we will have joint posterior draws of the two random variables that the pure premium is a function of,
-the posterior distribution of the pure premium (and relativities) is also known.
+It follows that
+$$X_{i} \times \frac{N_{i}}{\text{number of exposures for ith combination}} = P_{i},$$
+where $P_{i}$ is the pure premium for the ith combination of rating
+variables, is also a random variable. Since we will have joint posterior
+draws of the two random variables that the pure premium is a function
+of, the posterior distribution of the pure premium (and relativities) is
+also known.
 
-The above formulation should also give insight into what combination of rating variables
-should, in general, represent the base class pure premium. It is clear that the variance of the pure premium for the ith combination is $\frac{Var[X_{i}]}{\text{exposures}_{i}^2}$. Thus, choosing the base class with the largest amount of exposures will often yield a low varying (i.e. stable) pure premium (assuming the severity variance is not extremely large).
+The above formulation should also give insight into what combination of
+rating variables should, in general, represent the base class pure
+premium. It is clear that the variance of the pure premium for the ith
+combination is $\frac{Var[X_{i}]}{\text{exposures}_{i}^2}$. Thus,
+choosing the base class with the largest amount of exposures will often
+yield a low varying (i.e. stable) pure premium (assuming the severity
+variance is not extremely large).
 
-In addition, this Bayesian approach helps solve problems related to the aggregation 
-of data. 
+In addition, this Bayesian approach helps solve problems related to the
+aggregation of data.
 
 ### Feature Selection
 
-It was mentioned previously that feature selection is very difficult to carry out
-on an aggregated dataset where rows and columns are not independent. This is true
-if we are using explicit feature selection where rating variables are literally removed
-from the design matrix/training dataset.
+It was mentioned previously that feature selection is very difficult to
+carry out on an aggregated dataset where rows and columns are not
+independent. This is true if we are using explicit feature selection
+where rating variables are literally removed from the design
+matrix/training dataset.
 
-However, we can achieve feature selection through regularization as well. It turns
-out that L1 (LASSO), and L2 (ridge) are equivalent to Laplace and Normal zero mean priors on regression
-coefficients, for example. L1 regularization actually has the potential to explicitly 
-feature select as well, allowing for exactly zero coefficients (albeit, we are not maximizing but averaging in MCMC so we won't ever get this exactly in the Bayesian approach). The cost parameter
-typically associated with these regularization techniques is exactly equal to the 
-variance of the Laplace/Normal distributions - the larger the variance, the lower the cost/regularization.
-Bayesian approaches also allow for even more specific priors depending on the context, such as the
+However, we can achieve feature selection through regularization as
+well. It turns out that L1 (LASSO), and L2 (ridge) are equivalent to
+Laplace and Normal zero mean priors on regression coefficients, for
+example. L1 regularization actually has the potential to explicitly
+feature select as well, allowing for exactly zero coefficients (albeit,
+we are not maximizing but averaging in MCMC so we won't ever get this
+exactly in the Bayesian approach). The cost parameter typically
+associated with these regularization techniques is exactly equal to the
+variance of the Laplace/Normal distributions - the larger the variance,
+the lower the cost/regularization. Bayesian approaches also allow for
+even more specific priors depending on the context, such as the
 horseshoe/spike and slab priors.
 
-In the Bayesian context, the variance is chosen based on our confidence that the (predictive)
-effects of each level are non-zero, apriori. Alternatively, one can choose to use an
-empirical Bayes approach and tune this variance parameter using something like cross validation.
-This is equivalent to the typical machine learning approach - but in the Bayes context this isn't
-as feasible since Bayesian models fit using MCMC are slow. An alternative is to estimate the expected out of sample log pointwise predictive density (ELPD) using importance sampling (counterfactuals of the loglikelihood), which is faster than true cross validation (since there is no actual data splitting) but still perhaps too slow.
+In the Bayesian context, the variance is chosen based on our confidence
+that the (predictive) effects of each level are non-zero, apriori.
+Alternatively, one can choose to use an empirical Bayes approach and
+tune this variance parameter using something like cross validation. This
+is equivalent to the typical machine learning approach - but in the
+Bayes context this isn't as feasible since Bayesian models fit using
+MCMC are slow. An alternative is to estimate the expected out of sample
+log pointwise predictive density (ELPD) using importance sampling
+(counterfactuals of the loglikelihood), which is faster than true cross
+validation (since there is no actual data splitting) but still perhaps
+too slow.
 
-Regardless, the Bayesian model allows us to use regularization while still remaining
-completely probabilistic. This will pay off when we look at relativities.
+Regardless, the Bayesian model allows us to use regularization while
+still remaining completely probabilistic. This will pay off when we look
+at relativities.
 
 ### Predictive Performance
 
-The other main issue involved the issue of model validation in terms of predictive 
-performance. We cannot just naively split the dataset, because each row represents a unique 
-combination of rating variables.
+The other main issue involved the issue of model validation in terms of
+predictive performance. We cannot just naively split the dataset,
+because each row represents a unique combination of rating variables.
 
-We can, however, use likelihood based evaluation metrics if we are comparing models fit with the same underlying dataset (among other caveats like having the same raw target variable and avoiding comparisons between discrete and continuous distributions). One such metric is the aforementioned leave one out estimate of ELPD, which produces counterfactuals of the loglikelihood under scenarios where one observation at a time is excluded from the dataset (so that each resulting loglikelihood can be evaluated at the held out data point, simulating cross validation). However, just like true data splitting this still suffers from the same problem of each row being a unique combination of rating variables. Thus, the ELPD on the held out rating combination will be estimated through extrapolation, which is not true to how the model will behave in reality.
+We can, however, use likelihood based evaluation metrics if we are
+comparing models fit with the same underlying dataset (among other
+caveats like having the same raw target variable and avoiding
+comparisons between discrete and continuous distributions). One such
+metric is the aforementioned leave one out estimate of ELPD, which
+produces counterfactuals of the loglikelihood under scenarios where one
+observation at a time is excluded from the dataset (so that each
+resulting loglikelihood can be evaluated at the held out data point,
+simulating cross validation). However, just like true data splitting
+this still suffers from the same problem of each row being a unique
+combination of rating variables. Thus, the ELPD on the held out rating
+combination will be estimated through extrapolation, which is not true
+to how the model will behave in reality.
 
-Unfortunately, I still haven’t figured out a great way to solve this issue. The only alternative may be to perform posterior predictive checks, but these are known to be biased for predictive performance because this involves in-sample data (despite its name). Posterior predictive checks are mainly used for assessing the in-sample fit of a generative model to the data.
+Unfortunately, I still haven't figured out a great way to solve this
+issue. The only alternative may be to perform posterior predictive
+checks, but these are known to be biased for predictive performance
+because this involves in-sample data (despite its name). Posterior
+predictive checks are mainly used for assessing the in-sample fit of a
+generative model to the data.
 
-However, because we are providing full distributional predictions an argument can be made that naturally, the model (when correctly specified) will at least have the ability to give an interval of the true, underlying relativity for a future policyholder. While the model may still not assign a high mass to the true underlying relativity in some cases (which, if we had the ideal dataset we could detect this) an argument could be made that the true relativity was at least a possibility described by the model (say in a credible interval), something other traditional frequentist/machine learning methodologies do not have.
+However, because we are providing full distributional predictions an
+argument can be made that naturally, the model (when correctly
+specified) will at least have the ability to give an interval of the
+true, underlying relativity for a future policyholder. While the model
+may still not assign a high mass to the true underlying relativity in
+some cases (which, if we had the ideal dataset we could detect this) an
+argument could be made that the true relativity was at least a
+possibility described by the model (say in a credible interval),
+something other traditional frequentist/machine learning methodologies
+do not have.
 
 ## Stan Code
 
-Below is the exact same model I described above. In this case, I set $\tau$ and $\omega$ to 5 which are "weakly informative" priors. I don't really have strong apriori beliefs regarding the effects but 
-I still want enough regularization to shrink effects to 0, if it is justifiable. 
+Below is the exact same model I described above. In this case, I set
+$\tau$ and $\omega$ to 5 which are "weakly informative" priors. I don't
+really have strong apriori beliefs regarding the effects but I still
+want enough regularization to shrink effects to 0, if it is justifiable.
 
-For the variance parameter, I set $\alpha$ to 8. Again, this leads to a weakly informative prior, but in general I wanted to allow for the possibility of large conditional variances for particular rating combinations. Large losses likely have large dispersions, and some rating combinations may even have extreme dispersions depending on the observed data. 
+For the variance parameter, I set $\alpha$ to 8. Again, this leads to a
+weakly informative prior, but in general I wanted to allow for the
+possibility of large conditional variances for particular rating
+combinations. Large losses likely have large dispersions, and some
+rating combinations may even have extreme dispersions depending on the
+observed data.
 
 ```{stan output.var = "poisson_gamma_model"}
 data {
@@ -298,7 +426,7 @@ parameters {
 model {
   
   beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5);
+  beta_severity ~ normal(0, 5.5);
   dispersion_severity ~ cauchy(0, 8);
   
   claim_count ~ poisson_log(X * beta_frequency + log(exposure));
@@ -316,7 +444,7 @@ model {
 
 ```
 
-Next, I preprocess the data in a suitable format for Stan. 
+Next, I preprocess the data in a suitable format for Stan.
 
 ```{r Preprocessing}
 
@@ -380,6 +508,7 @@ if (refit == TRUE) {
 ```
 
 This function extracts the required samples from the MCMC sampler.
+
 ```{r Helper Function For Extraction of Posterior Parameters}
 #' Extract the required mean/dispersion parameters for both candidate frequency
 #` and severity distributions. 
@@ -498,15 +627,16 @@ posterior_pred_check <- function(posterior_predictive_samples, y, n, variable,
 }
 ```
 
-Note that these are misleading in the sense that they aren't actual assessments
-of predictive performance, but of in-sample fit as discussed above. Still, if the 
-model severely underfits the underlying data then the model will very likely not predict well. 
+Note that these are misleading in the sense that they aren't actual
+assessments of predictive performance, but of in-sample fit as discussed
+above. Still, if the model severely underfits the underlying data then
+the model will very likely not predict well.
 
 ### Posterior Predictive Check - Frequency
 
-First, I generate samples from the posterior predictive distribution as follows.
-I then perform the posterior predictive check (i.e. compare the genrated data 
-against the observed data).
+First, I generate samples from the posterior predictive distribution as
+follows. I then perform the posterior predictive check (i.e. compare the
+genrated data against the observed data).
 
 ```{r Generate Samples}
 
@@ -532,26 +662,28 @@ posterior_pred_check(
 	)
 ```
 
-The blue curves represent 3000 simulated datasets generated from the posterior predictive.
-The black curve is the actual, observed dataset (in this, claim counts). Ideally,
-we want the black curve to fall **well** within the blue region as this implies
-that the actual, observed dataset is a likely realization under our generative model.
+The blue curves represent 3000 simulated datasets generated from the
+posterior predictive. The black curve is the actual, observed dataset
+(in this case, claim counts). Ideally, we want the black curve to fall
+**well** within the blue region as this implies that the actual,
+observed dataset is a likely realization under our generative model.
 
-The posterior predictive graphs are all zoomed in on the region where the density is not trivially 0 
-for easier inspection.
+The posterior predictive graphs are all zoomed in on the region where
+the density is not trivially 0 for easier inspection.
 
-Overall, we can see that the frequency model looks decent at most of the claim count
-ranges (especially the lower claim counts), but the rating combinations
-with larger claim counts seem to be more variable than what the model can explain.
+Overall, we can see that the frequency model looks decent at most of the
+claim count ranges (especially the lower claim counts), but the rating
+combinations with larger claim counts seem to be more variable than what
+the model can explain.
 
-That is, the distribution of claim counts exhibits possible overdispersion. Thus,
-a possible improvement to the model might be to use the negative binomial distribution
-instead, rather than the Poisson.
+That is, the distribution of claim counts exhibits possible
+overdispersion. Thus, a possible improvement to the model might be to
+use the negative binomial distribution instead, rather than the Poisson.
 
 ### Posterior Predictive Check - Severity
 
-Similarily, we get posterior predictive draws of severities per each combination
-of rating variables.
+Similarily, we get posterior predictive draws of severities per each
+combination of rating variables.
 
 ```{r}
 
@@ -614,13 +746,23 @@ posterior_pred_check(
 	)
 
 ```
-As we can see in this case, the generative model looks off here. The model underfits the most important areas of largest density (the large spike) and fails to account for uncertainty at higher and lower levels 
-of severity. 
 
-A major contributor to this is the fact that there is an unusual amount of density in the 31,000 region for severity. It turns out that this corresponds to a bunch of rating combinations with one or two claims and total payments in multiples of 31,442. This is likely an artifact that has been inserted in the data that is incredibly suspicious. However, these rating combinations receive such little weight in the fit due to the weighting scheme employed and therefore the overall impact of these large severity amounts should be mitigated. 
+As we can see in this case, the generative model looks off here. The
+model underfits the most important areas of largest density (the large
+spike) and fails to account for uncertainty at higher and lower levels
+of severity.
 
-Ultimately, however, the goal is the pure premium since our relativities are based
-on these quantities. 
+A major contributor to this is the fact that there is an unusual amount
+of density in the 31,000 region for severity. It turns out that this
+corresponds to a bunch of rating combinations with one or two claims and
+total payments in multiples of 31,442. This is likely an artifact that
+has been inserted in the data that is incredibly suspicious. However,
+these rating combinations receive such little weight in the fit due to
+the weighting scheme employed and therefore the overall impact of these
+large severity amounts should be mitigated.
+
+Ultimately, however, the goal is the pure premium since our relativities
+are based on these quantities.
 
 ### Posterior Predictive Check - Pure Premium
 
@@ -641,9 +783,14 @@ posterior_pred_check(
 
 ```
 
-The "spikes" in the distribution are not as extreme as what is observed in the data. The black curve does not fall in the blue region in important areas of the distribution, namely the single peak. Thus, under the generative model the observed data is simply not probable in some regions of pure premium, which is an issue.
+The "spikes" in the distribution are not as extreme as what is observed
+in the data. The black curve does not fall in the blue region in
+important areas of the distribution, namely the single peak. Thus, under
+the generative model the observed data is simply not probable in some
+regions of pure premium, which is an issue.
 
-Otherwise, the generative model at least has the right shape, for the most part. 
+Otherwise, the generative model at least has the right shape, for the
+most part.
 
 ```{r remove objects, include = FALSE}
 
@@ -656,23 +803,28 @@ rm(
 
 ## Model Revision - Switch Frequency to Negative Binomial
 
-We noticed in the previous section that the Poisson distribution does not account for as much variance as we would like. Indeed, the variance of the Poisson distribution is equal to its mean. 
+We noticed in the previous section that the Poisson distribution does
+not account for as much variance as we would like. Indeed, the variance
+of the Poisson distribution is equal to its mean.
 
-A negative binomial has variance greater than its mean and therefore could address issues
-where uncertainty is understated for particular rating variable combinations with large claim counts.
+A negative binomial has variance greater than its mean and therefore
+could address issues where uncertainty is understated for particular
+rating variable combinations with large claim counts.
 
-The generative model is quite similar to the previous model, but we switch the frequency distribution:
+The generative model is quite similar to the previous model, but we
+switch the frequency distribution:
 
 $$X_{i} \big|N_{i}, \phi, \eta_{i} \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{i}}{\eta_{i} \times \phi}\right),$$
 
 $$\eta_{i} \big| \beta, R_{i} = exp(R_{i} \times \beta),$$
 $$N_{i} \big|\xi_{i}, \nu \sim \text{Negative Binomial}(\xi_{i}, \nu),$$
 $$\xi_{i} \big|\psi, R_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
-$$\beta \sim Normal(0, 5),$$
+$$\beta \sim Normal(0, 5.5),$$ 
 $$\psi \sim Normal(0, 5),$$
 $$\phi \sim \text{Half-Cauchy}(0, 8),$$
-$$\nu \sim \text{Half-Cauchy}(0, 8).$$
-Note that the Negative Binomial is using the mean, dispersion parameterization in Stan (i.e. NegativeBinomial2).
+$$\nu \sim \text{Half-Cauchy}(0, 15).$$ Note that the Negative Binomial
+is using the mean, dispersion parameterization in Stan (i.e.
+NegativeBinomial2).
 
 Compiling the model above in Stan:
 
@@ -697,9 +849,11 @@ parameters {
 model {
   
   beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5);
+  beta_severity ~ normal(0, 5.5);
   dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 8);
+  dispersion_frequency ~ cauchy(0, 15); /* Larger variance here for the negative binomial 
+  because the data did not appear to be that overdispersed and we need to allow for
+  larger dispersion parameters to consider these cases */
   
   claim_count ~ neg_binomial_2_log(
   	X * beta_frequency + log(exposure), dispersion_frequency
@@ -757,7 +911,7 @@ dispersion_frequency_nb <- matrix(
 
 ## Posterior Predictive Check - Revision I
 
-We again simulate observations from the posterior predictive. 
+We again simulate observations from the posterior predictive.
 
 ```{r}
 
@@ -830,18 +984,18 @@ Finally:
 )
 
 ```
-Overall, the frequency distribution (claims) looks to be better modeled with a Negative Binomial,
-albeit marginally.
 
-The severity distribution still looks off, and as a result, the pure premium looks only
-marginally (if that) better than before.
+Overall, the frequency distribution (claims) looks to be better modeled
+with a Negative Binomial, albeit marginally.
+
+The severity distribution still looks off, and as a result, the pure
+premium looks only marginally (if that) better than before.
 
 ```{r include = FALSE}
 rm(
 	claim_count_posterior_pred_nb,
 	nb_posterior_samples, 
 	parameters_nb,
-	simulate_pure_premium,
 	simulate_severity_nb
 	)
 
@@ -850,19 +1004,34 @@ gc()
 
 ## Model Revision - Switch Severity to A More Heavy Tailed Distribution
 
-It looks like the current generative model gives too much density to small severity amounts, but also too much density to larger amounts. Therefore, if we switch to a heavy tailed distribution we might make the tails even heavier (and they are already too heavy) even though we may improve the fit for smaller severity amounts. 
+It looks like the current generative model gives too much density to
+small severity amounts, but also too much density to larger amounts.
+Therefore, if we switch to a heavy tailed distribution we might make the
+tails even heavier (and they are already too heavy) even though we may
+improve the fit for smaller severity amounts.
 
-Regardless, we can still explore these distributions and see how they compare.
+Regardless, we can still explore these distributions and see how they
+compare.
 
-There are many heavy tailed distributions that have heavier tails than the gamma.
+There are many heavy tailed distributions that have heavier tails than
+the gamma.
 
 ### Log-normal
 
-The log-normal distribution is known to have heavier tails than the gamma distribution.
+The log-normal distribution is known to have heavier tails than the
+gamma distribution.
 
-Stan actually has a log-normal distribution built in. However, it is difficult to work with the log-normal distribution when linking the expected value of the log-normal with predictors (this is because the log-normal does not belong to the exponential dispersion family).
+Stan actually has a log-normal distribution built in. However, it is
+difficult to work with the log-normal distribution when linking the
+expected value of the log-normal with predictors (this is because the
+log-normal does not belong to the exponential dispersion family).
 
-Instead of using the log-normal distribution, we can instead log the severity random variable to get a Normal($\mu$, $\sigma$) random variable (assuming that the severity random variable is log-normal). We can then simulate directly from the log-normal distribution using the posterior parameters to get the posterior predictive of the original (assumed) log-normal severity random variable.
+Instead of using the log-normal distribution, we can instead log the
+severity random variable to get a Normal($\mu$, $\sigma$) random
+variable (assuming that the severity random variable is log-normal). We
+can then simulate directly from the log-normal distribution using the
+posterior parameters to get the posterior predictive of the original
+(assumed) log-normal severity random variable.
 
 ```{r}
 data_list$severity <- ifelse(
@@ -872,7 +1041,9 @@ data_list$severity <- ifelse(
 )
 ```
 
-The generative model is exactly the same as before, except now we replace $X_{i} \big | N_{i}, \phi, \eta_{i}$ with a log-normal that has parameters $R_{i}\beta, \frac{\sigma}{N_{i}^{0.5}}$.
+The generative model is exactly the same as before, except now we
+replace $X_{i} \big | N_{i}, \phi, \eta_{i}$ with a log-normal that has
+parameters $R_{i}\beta, \frac{\sigma}{N_{i}^{0.5}}$.
 
 ```{stan output.var="sm_nb_lognormal"}
 data {
@@ -895,9 +1066,9 @@ parameters {
 model {
   
   beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5);
+  beta_severity ~ normal(0, 5.5);
   dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 8);
+  dispersion_frequency ~ cauchy(0, 15);
   
   claim_count ~ neg_binomial_2_log(
   	X * beta_frequency + log(exposure), dispersion_frequency
@@ -1045,11 +1216,16 @@ Like before:
 
 ```
 
-The fit is mixed, as we expected. There is clearly more mass being put towards the tail
-and less towards small severity amounts which has improved the fit dramatically in this region. However, more density has been allocated to the larger severity amounts as a consequence which has made the generative model behave worse there.
+The fit is mixed, as we expected. There is clearly more mass being put
+towards the tail and less towards small severity amounts which has
+improved the fit dramatically in this region. However, more density has
+been allocated to the larger severity amounts as a consequence which has
+made the generative model behave worse there.
 
-The pure premium model looks better in some areas and slightly worse than others as a result.
-The region of highest density is being modeled a bit better than the gamma, but arguably worse than the gamma result at lower pure premium values.
+The pure premium model looks better in some areas and slightly worse
+than others as a result. The region of highest density is being modeled
+a bit better than the gamma, but arguably worse than the gamma result at
+lower pure premium values.
 
 ```{r include = FALSE}
 rm(
@@ -1063,9 +1239,12 @@ rm(
 
 ### Inverse-Gaussian
 
-The inverse-gaussian is even more heavier tailed when compared to the log-normal. This is likely going to be similar to the above log-normal, but even to a higher extreme. 
+The inverse-gaussian is even more heavier tailed when compared to the
+log-normal. This is likely going to be similar to the above log-normal,
+but even to a higher extreme.
 
-This requires writing a custom Stan function since the inverse-gaussian is not actually implemented natively in Stan.
+This requires writing a custom Stan function since the inverse-gaussian
+is not actually implemented natively in Stan.
 
 ```{stan output.var="sm_nb_ig"}
 functions {
@@ -1113,9 +1292,9 @@ parameters {
 model {
   
   beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5);
+  beta_severity ~ normal(0, 5.5);
   dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 8);
+  dispersion_frequency ~ cauchy(0, 15);
   
   claim_count ~ neg_binomial_2_log(
   	X * beta_frequency + log(exposure), dispersion_frequency
@@ -1261,8 +1440,396 @@ Like before:
 
 ```
 
-Overall, the fit looks surprisingly better than the lognormal and overall, looks to be the best fitting model out of everything that has been tried up to this point. The resulting posterior predictive distribution of the pure premium looks to allow for the observed pure premiums at nearly every range of pure premium.  
+Overall, the fit looks surprisingly better than the lognormal and
+overall, looks to be the best fitting model out of everything that has
+been tried up to this point. The resulting posterior predictive
+distribution of the pure premium has the ability to generate the actual
+observed data with reasonable probability in most ranges.
+
+```{r, include = FALSE}
+rm(
+	results, IG_sev_posterior_samples, fit_nb_gamma, fit_nb_IG,
+	dispersion_frequency_nb, dispersion_severity_posterior, lambda, nb_gamma,
+	sm_nb_ig, simulate_pure_premium_IG, simulate_severity_IG, 
+	claim_count_posterior_pred_nb, sm_nb_lognormal
+	)
+
+```
 
 ## The Random Crossed Effects Model
 
+All of the models above have their parameters estimated using only
+observations that are relevant to that parameter. For example, only
+rating combinations with `zone 1` contribute to the estimation of the
+coefficient relevant to `zone 1`. However, many of the rating
+combinations have much smaller claim and/or exposure counts when
+compared to other, more popular combinations. That is, many of the
+rating combinations are sparse.
+
+A common practice is to simply group specific levels together to get rid
+of this sparsity (discussed in "The Dataset"). However, as mentioned
+previously this decision corresponds directly with assuming a incredibly
+strong prior assumption which is not transparent.
+
+Instead of committing to these post-hoc methods, we can instead take
+advantage of partial pooling in which sparse rating combinations will
+have their estimates computed as a weighted average between the global
+average over all combinations and the individual estimate, where the
+weighting depends on the amount of data and the observed variation per
+each combination. This is often interpreted as a way to induce the
+sharing of information over different levels of particular rating
+variables. In the actuarial world, this is a very similar idea to
+credibility theory but in a less ad-hoc fashion.
+
+In addition, the variation between rating levels accounts for extra
+variation between (and not just within each level) each individual level
+of a rating variable. This leads to larger credible intervals which
+allows for better inferences, if desired.
+
+### The Generative Random Effects Model
+
+### Random Crossed Effects Generative Model
+
+```{stan output.var="sm_random_effects"}
+
+functions {
+
+/* This is just the observed loglikelihood of the IG, with additive constants
+removed */
+
+	real IG_lpdf (real x, real mu, real lambda) {
+	
+		real lprob;
+		
+		if (!(x > 0)) {
+			reject("x must be strictly greater than 0");
+		} 
+		
+		if (!(mu > 0)) {
+			reject("mu must be strictly greater than 0");
+		} 
+		
+		if (!(lambda > 0)) {
+			reject("lambda must be strictly greater than 0");
+		}	
+		
+		lprob = 0.5 * log(lambda) - (lambda * (x-mu)^2/(2 * mu^2 * x));
+		return lprob;
+	}
+}
+
+data {
+  int<lower=1> Nobs;
+  int<lower=1> Nvar;
+  int<lower=1> N_lev_km;
+  int<lower=1> N_lev_zone;
+  int<lower=1> N_lev_bonus;
+  int<lower=1> N_lev_make;
+  int X[Nobs, Nvar];
+  int<lower=0> claim_count[Nobs];
+  vector<lower=0>[Nobs] exposure;
+  vector<lower=0>[Nobs] severity;
+}
+
+parameters {
+
+  real<lower=0> dispersion_severity;
+  real<lower=0> dispersion_frequency;
+  
+  /* Frequency random effects mu and sigma */
+  real mu_freq;
+  real<lower=0> freq_sigma_km;
+  real<lower=0> freq_sigma_zone;
+  real<lower=0> freq_sigma_bonus;
+  real<lower=0> freq_sigma_make;
+  
+  vector[N_lev_km] freq_eta_km;
+  vector[N_lev_zone] freq_eta_zone;
+  vector[N_lev_bonus] freq_eta_bonus;
+  vector[N_lev_make] freq_eta_make;
+  
+  /* Severity random effects mu and sigma */
+  real mu_sev;
+  real<lower=0> sev_sigma_km;
+  real<lower=0> sev_sigma_zone;
+  real<lower=0> sev_sigma_bonus;
+  real<lower=0> sev_sigma_make;
+  
+  vector[N_lev_km] sev_eta_km;
+  vector[N_lev_zone] sev_eta_zone;
+  vector[N_lev_bonus] sev_eta_bonus;
+  vector[N_lev_make] sev_eta_make;
+  
+}
+
+transformed parameters {
+
+	/* Frequency random effects */
+	vector[N_lev_km] freq_re_km;
+	vector[N_lev_zone] freq_re_zone;
+	vector[N_lev_bonus] freq_re_bonus;
+	vector[N_lev_make] freq_re_make;
+	
+	/* Severity random effects */
+	vector[N_lev_km] sev_re_km;
+	vector[N_lev_zone] sev_re_zone;
+	vector[N_lev_bonus] sev_re_bonus;
+	vector[N_lev_make] sev_re_make;
+	
+	freq_re_km = freq_sigma_km * freq_eta_km;
+	freq_re_zone = freq_sigma_zone * freq_eta_zone;
+	freq_re_bonus = freq_sigma_bonus * freq_eta_bonus;
+	freq_re_make = freq_sigma_make * freq_eta_make;
+
+	sev_re_km = sev_sigma_km * sev_eta_km;
+	sev_re_zone = sev_sigma_zone * sev_eta_zone;
+	sev_re_bonus = sev_sigma_bonus * sev_eta_bonus;
+	sev_re_make = sev_sigma_make * sev_eta_make;	
+	
+}
+
+model {
+
+	vector[Nobs] mu_nb = mu_freq + rep_vector(0, Nobs) + log(exposure);
+	vector[Nobs] mu_ig = mu_sev + rep_vector(0, Nobs);
+	
+	for (i in 1:Nobs) {
+		mu_nb[i] += freq_re_km[X[i, 1]] + freq_re_zone[X[i, 2]] + freq_re_bonus[X[i, 3]] + freq_re_make[X[i, 4]]; 
+	  mu_ig[i] += sev_re_km[X[i, 1]] + sev_re_zone[X[i, 2]] + sev_re_bonus[X[i, 3]] + sev_re_make[X[i, 4]];
+	}
+  
+  mu_freq ~ normal(0, 6);
+  mu_sev ~ normal(0, 7);
+  dispersion_severity ~ cauchy(0, 8);
+  dispersion_frequency ~ cauchy(0, 15);
+  
+  /* Eta parameters: all must be N(0, 1)  */
+  freq_eta_km ~ normal(0, 1);
+  freq_eta_zone ~ normal(0, 1);
+  freq_eta_bonus ~ normal(0, 1);
+  freq_eta_make ~ normal(0, 1);
+  
+  sev_eta_km ~ normal(0, 1);
+  sev_eta_zone ~ normal(0, 1);
+  sev_eta_bonus ~ normal(0, 1);
+  sev_eta_make ~ normal(0, 1);
+  
+  /* Variation between levels for each rating variable */
+  /* Default weakly informative again */
+  freq_sigma_km ~ student_t(3, 0, 2.5);
+  freq_sigma_zone ~ student_t(3, 0, 2.5);
+  freq_sigma_bonus ~ student_t(3, 0, 2.5);
+  freq_sigma_make ~ student_t(3, 0, 2.5);
+  
+  sev_sigma_km ~ student_t(3, 0, 2.5);
+  sev_sigma_zone ~ student_t(3, 0, 2.5);
+  sev_sigma_bonus ~ student_t(3, 0, 2.5);
+  sev_sigma_make ~ student_t(3, 0, 2.5);
+  
+  claim_count ~ neg_binomial_2_log(
+  	mu_nb, dispersion_frequency
+  );
+  
+  for (i in 1:Nobs) {
+  
+    if (claim_count[i] != 0) {
+      target += IG_lpdf(
+      	severity[i] | exp(mu_ig[i]), 
+      	claim_count[i] / dispersion_severity
+      	);
+    } 
+  }
+  
+}
+```
+
+We have to redefine the data list here since the random effects model is parameterized
+differently.
+
+```{r}
+data_re <- list(
+	Nobs = nrow(data_with_severity),
+	Nvar = 4, 
+	N_lev_km = length(unique(data_with_severity$kilometres)),
+	N_lev_zone = length(unique(data_with_severity$zone)),
+	N_lev_bonus = length(unique(data_with_severity$bonus)),
+	N_lev_make = length(unique(data_with_severity$make)),
+	X = data_with_severity[, 1:4],
+	claim_count = data_with_severity$claim_count,
+	exposure = data_with_severity$vehicle_exposure_years,
+	severity = data_with_severity$severity
+)
+
+```
+
+Sampling from the posterior again:
+
+```{r}
+
+if (refit == TRUE) {
+
+	fit_re <- sampling(
+			sm_random_effects,
+			data = data_re,
+			chains = 6,
+			iter = 6000,
+			control = list(adapt_delta = 0.97),
+			seed = 200350623,
+			cores = 6,
+			verbose = TRUE
+			)
+	
+	saveRDS(fit_re, file = "rds/fitted_re.rds")
+	
+} else {
+	
+	fit_re <- readRDS("rds/fitted_re.rds")
+	
+}
+```
+Extracting the needed samples to simulate from the posterior predictive:
+
+```{r}
+re_samples <- rstan::extract(
+	fit_re,
+	pars = c(
+		"dispersion_severity",
+		"dispersion_frequency",
+		"mu_freq",
+		"mu_sev",
+		"freq_sigma_km",
+		"freq_sigma_zone",
+		"freq_sigma_make",
+		"freq_sigma_bonus",
+		"sev_sigma_km",
+		"sev_sigma_zone",
+		"sev_sigma_make",
+		"sev_sigma_bonus",
+		"freq_re_km",
+		"freq_re_zone",
+		"freq_re_bonus",
+		"freq_re_make",
+		"sev_re_km",
+		"sev_re_zone",
+		"sev_re_bonus",
+		"sev_re_make"
+		)
+	)
+
+```
+
+Computing the required posterior parameters for the frequency distribution,
+and then generating posterior predictive samples:
+
+```{r}
+
+nb_mu <- matrix(
+	data = re_samples$mu_freq, nrow = 18000, ncol = nrow(data_with_severity)
+	) + 
+	matrix(
+		data = log(data_with_severity$vehicle_exposure_years),
+		nrow = 18000,
+		ncol = nrow(data_with_severity),
+		byrow = TRUE
+	) + 
+	re_samples$freq_re_km[, data_with_severity$kilometres] +
+	re_samples$freq_re_zone[, data_with_severity$zone] +
+	re_samples$freq_re_bonus[, data_with_severity$bonus] + 
+	re_samples$freq_re_make[, data_with_severity$make]
+
+nb_disp <- matrix(
+	data = re_samples$dispersion_frequency,
+	nrow = 18000,
+	ncol = nrow(data_with_severity)
+)
+
+set.seed(200350623)
+claim_count_posterior_pred_nb <- rnbinom(
+	n = length(nb_mu),
+	mu = exp(nb_mu),
+	size = nb_disp
+	)
+
+dim(claim_count_posterior_pred_nb) <- dim(nb_mu)
+
+```
+
+```{r}
+ig_mu <- matrix(
+	data = re_samples$mu_sev, nrow = 18000, ncol = nrow(data_with_severity)
+) +
+	re_samples$sev_re_km[, data_with_severity$kilometres] +
+	re_samples$sev_re_zone[, data_with_severity$zone] +
+	re_samples$sev_re_bonus[, data_with_severity$bonus] + 
+	re_samples$sev_re_make[, data_with_severity$make]
+
+ig_lambda <- claim_count_posterior_pred_nb / 
+	matrix(
+		data = re_samples$dispersion_severity,
+		nrow = 18000,
+		ncol = nrow(data_with_severity)
+		)
+
+set.seed(200350623)
+severity_posterior_predictive <- rinvgauss(
+	n = length(ig_lambda),
+	mean = exp(ig_mu),
+	shape = ig_lambda
+)
+
+dim(severity_posterior_predictive) <- dim(ig_lambda)
+```
+
+```{r, include = FALSE}
+rm(ig_lambda, ig_mu, nb_disp, nb_mu)
+```
+
+```{r}
+posterior_predictive_pp <- claim_count_posterior_pred_nb / 
+	matrix(
+		data = data_with_severity$vehicle_exposure_years,
+		nrow = 18000,
+		ncol = nrow(data_with_severity),
+		byrow = TRUE
+	) * severity_posterior_predictive
+
+```
+
+Finally:
+
+```{r}
+results <- mapply(
+	posterior_pred_check,
+	posterior_predictive_samples = list(
+			claim_count_posterior_pred_nb,
+			severity_posterior_predictive,
+			posterior_predictive_pp
+			),
+	y = list(
+			data_with_severity$claim_count,
+			data_with_severity$severity,
+			data_with_severity$observed_pp
+			),
+	variable = c(
+			"claims (sqrt scaled)",
+			"severity (sqrt scaled)",
+			"pure premium (sqrt scaled)"
+			),
+	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
+	MoreArgs = list(n = 3000),
+	SIMPLIFY = FALSE
+	)
+```
+
+```{r, fig.align="center", fig.height=6, fig.width=10}
+
+(results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
+	title = "Posterior Predictive Check - Random Effects Model"
+)
+
+```
+
+Overall, there is a marginal improvement particularly at pure premium regions of low density. However, it is debatable in this case if we are seeing massive improvement here especially when we consider that the random effects model takes longer to sample. This isn't really that surprising, however. The rating combinations corresponding with the most frequent pure premium values are made up of many exposures and claims, causing small within group variation (this is explicitly formulated in both generative models) and therefore less pooling.
+
+##
 
