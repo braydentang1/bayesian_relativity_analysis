@@ -1464,7 +1464,7 @@ $$N_{i} \big|\xi_{i}, \nu \sim \text{Negative Binomial}(\xi_{i}, \nu),$$
 $$\xi_{i} \big|\psi, \vec{t} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
 $$\vec{t} \big| \tau^2 \sim \text{MVN}(\vec{0}, \tau^2),$$
 $$\tau^2 = \begin{bmatrix}\tau_j^2 & 0 & 0 & 0\\0 & \tau_{k}^2\ & 0 & 0\\ 0 & 0 & \tau_{l}^2 & 0 \\ 0 & 0 & 0 \ & \tau_{m}^2 \end{bmatrix},$$
-$$\psi \sim Normal(0, 6),$$
+$$\psi \sim \text{Normal}(0, 6),$$
 $$\phi \sim \text{Half-Cauchy}(0, 8),$$
 $$\nu \sim \text{Half-Cauchy}(0, 15),$$
 $$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)},$$
