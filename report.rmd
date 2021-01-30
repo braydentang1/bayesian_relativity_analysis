@@ -80,7 +80,6 @@ premium of the relevant level from the base class to obtain these
 relativities.
 
 ```{r relativities, echo = FALSE}
-
 example_city_rels <- tibble(
 	City = c("Small City", "Medium City", "Large City"),
 	Relativity = c(0.95, 1, 1.50)
@@ -126,7 +125,6 @@ of mileage has a pure premium of \$1000 \* 0.95 \* 1.378 = '\$1309.10.
 I import the dataset below:
 
 ```{r Import the data, echo = FALSE}
-
 data <- read_csv("data/pricingdat.csv") 
 
 data %>% 
@@ -157,18 +155,13 @@ row is unique. If we did, the model would be evaluated against
 combinations of rating variables that would be completely unseen in the
 training set, forcing the model to extrapolate (likely leading to poor
 predictions that aren't reflective of how the model would perform in
-reality). Furthermore, some rows in the test set would be aggregations
-of very few observations. Thus, models would be penalized heavily for
-poor predictions on rating combinations that are very rare. This is not
-as bad of an issue, however, since we can weight errors on each
-combination of rating variables by the number of exposures (for
-frequency) and number of claims (for severity), respectively.
+reality). 
 
 Second, explicit feature selection (which is emphasized a lot in pricing
 since there are many business reasons to have as simple of a rating
 algorithm as possible), is impossible. We cannot simply drop columns
 without affecting the number of rows (and therefore, completely changing
-the dataset in the process). Therefore, fairly comparing models that
+the dataset in the process). Thus, fairly comparing models that
 have different underlying training datasets is not very clear.
 
 Third, each row will become more sparse as well due to the curse of
@@ -263,7 +256,7 @@ uncertainty in our data. This will allow actuaries to actually choose
 reasonable values that are in line with the amount of uncertainty that
 they have apriori and within the data. In addition, it allows actuaries
 to quantify their confidence in allowing for a non-monotonic relativity,
-giving them the ability to defend any non-monotonic relativities.
+giving them the ability to defend their decisions.
 
 ## The Bayesian/Generative Model
 
@@ -326,13 +319,13 @@ independent. This is true if we are using explicit feature selection
 where rating variables are literally removed from the design
 matrix/training dataset.
 
-However, we can achieve feature selection through regularization as
+However, we can achieve "feature selection" through regularization as
 well. It turns out that L1 (LASSO), and L2 (ridge) are equivalent to
 Laplace and Normal zero mean priors on regression coefficients, for
 example. L1 regularization actually has the potential to explicitly
 feature select as well, allowing for exactly zero coefficients (albeit,
-we are not maximizing but averaging in MCMC so we won't ever get this
-exactly in the Bayesian approach). The cost parameter typically
+we are not maximizing but marginalizing in Bayesian approaches in general
+so we won't ever get this exactly in the Bayesian approach). The cost parameter typically
 associated with these regularization techniques is exactly equal to the
 variance of the Laplace/Normal distributions - the larger the variance,
 the lower the cost/regularization. Bayesian approaches also allow for
@@ -348,8 +341,7 @@ Bayes context this isn't as feasible since Bayesian models fit using
 MCMC are slow. An alternative is to estimate the expected out of sample
 log pointwise predictive density (ELPD) using importance sampling
 (counterfactuals of the loglikelihood), which is faster than true cross
-validation (since there is no actual data splitting) but still perhaps
-too slow.
+validation (since there is no actual data splitting) but still potentially too slow.
 
 Regardless, the Bayesian model allows us to use regularization while
 still remaining completely probabilistic. This will pay off when we look
@@ -370,7 +362,7 @@ produces counterfactuals of the loglikelihood under scenarios where one
 observation at a time is excluded from the dataset (so that each
 resulting loglikelihood can be evaluated at the held out data point,
 simulating cross validation). However, just like true data splitting
-this still suffers from the same problem of each row being a unique
+we still suffer from the same problem of each row being a unique
 combination of rating variables. Thus, the ELPD on the held out rating
 combination will be estimated through extrapolation, which is not true
 to how the model will behave in reality.
@@ -378,34 +370,21 @@ to how the model will behave in reality.
 Unfortunately, I still haven't figured out a great way to solve this
 issue. The only alternative may be to perform posterior predictive
 checks, but these are known to be biased for predictive performance
-because this involves in-sample data (despite its name). Posterior
-predictive checks are mainly used for assessing the in-sample fit of a
-generative model to the data.
+because this involves in-sample data. Despite this, [some do suggest the use of 50% credible intervals to at least detect overfitting.](https://stats.stackexchange.com/questions/343420/bayesian-thinking-about-overfitting)
 
-However, because we are providing full distributional predictions an
-argument can be made that naturally, the model (when correctly
-specified) will at least have the ability to give an interval of the
-true, underlying relativity for a future policyholder. While the model
-may still not assign a high mass to the true underlying relativity in
-some cases (which, if we had the ideal dataset we could detect this) an
-argument could be made that the true relativity was at least a
-possibility described by the model (say in a credible interval),
-something other traditional frequentist/machine learning methodologies
-do not have.
+Some argue that Bayesian methods cannot really overfit providing that uninformative priors
+are avoided, and in general, if marginalizing rather than maximization is done as much as possible. Informative priors encourage estimators to not fully rely on the underlying training dataset by introducing bias via. the prior. Marginalization is preferable to maximization since marginalization respects the presence of uncertainty through the weighting of each outcome with its posterior probability.
+
+Regardless, none of this allows for the ability to quantify how well the model actually predicts in absolute terms. 
 
 ## Stan Code
 
 Below is the exact same model I described above. In this case, I set
-$\tau$ and $\omega$ to 5 which are "weakly informative" priors. I don't
-really have strong apriori beliefs regarding the effects but I still
-want enough regularization to shrink effects to 0, if it is justifiable.
+$\tau$ and $\omega$ to 5 and 5.5, respectively, which are "weakly informative" priors.
+I don't really have strong apriori beliefs regarding the effects (I really have no context regarding the data)
+but I still want enough regularization to shrink effects to 0, if it is justifiable.
 
-For the variance parameter, I set $\alpha$ to 8. Again, this leads to a
-weakly informative prior, but in general I wanted to allow for the
-possibility of large conditional variances for particular rating
-combinations. Large losses likely have large dispersions, and some
-rating combinations may even have extreme dispersions depending on the
-observed data.
+For the variance parameter, I set $\alpha$ to 8. This is again a weakly informative prior.
 
 ```{stan output.var = "poisson_gamma_model"}
 data {
@@ -447,7 +426,6 @@ model {
 Next, I preprocess the data in a suitable format for Stan.
 
 ```{r Preprocessing}
-
 data_with_severity <- data %>%
 	mutate(
 		severity = ifelse(claim_count != 0, claim_payments / claim_count, 0), 
@@ -488,7 +466,6 @@ data_list <- list(
 Now we sample from the posterior distribution as required:
 
 ```{r Sample from Posterior - Poisson/Gamma}
-
 if (refit == TRUE) {
 	fit_poisson_gamma <- sampling(
 		poisson_gamma_model,
@@ -612,14 +589,14 @@ posterior_pred_check <- function(posterior_predictive_samples, y, n, variable,
 		select(-obs)
 	
 	ggplot(data_tibble, aes(x = var)) +
-		geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.01)) +
+		geom_density(aes(group = as.factor(iter)), color = alpha("blue", 0.7)) +
 		theme_bw() +
 		scale_x_continuous(trans = "sqrt") +
 		geom_density(
 			data = tibble(actual = y),
 			aes(x = actual), 
-			size = 0.75, 
-			alpha = 0.3
+			size = 1, 
+			alpha = 0.9
 			) +
 		coord_cartesian(xlim = limits, expand = FALSE) +
 		labs(x = variable)
@@ -634,12 +611,10 @@ the model will very likely not predict well.
 
 ### Posterior Predictive Check - Frequency
 
-First, I generate samples from the posterior predictive distribution as
-follows. I then perform the posterior predictive check (i.e. compare the
-genrated data against the observed data).
+First, I generate samples from the posterior predictive distribution. 
+I then perform the posterior predictive check (i.e. compare the generated data against the observed data).
 
 ```{r Generate Samples}
-
 # Basically, flatten the matrix of frequencies to a vector, generate a vector 
 # of length equal to this vector using each of these frequencies, then convert
 # back
@@ -656,20 +631,20 @@ dim(claim_count_posterior_pred) <- dim(pg_posterior_samples$frequency_samples)
 posterior_pred_check(
 	claim_count_posterior_pred,
 	y = data$claim_count,
-	n = 3000, 
+	n = 50, 
 	"claims (sqrt scaled)",
 	limits = c(0, 700)
 	)
 ```
 
-The blue curves represent 3000 simulated datasets generated from the
+The blue curves represent 50 simulated datasets generated from the
 posterior predictive. The black curve is the actual, observed dataset
 (in this case, claim counts). Ideally, we want the black curve to fall
 **well** within the blue region as this implies that the actual,
 observed dataset is a likely realization under our generative model.
 
 The posterior predictive graphs are all zoomed in on the region where
-the density is not trivially 0 for easier inspection.
+the density is not trivially zero for easier inspection.
 
 Overall, we can see that the frequency model looks decent at most of the
 claim count ranges (especially the lower claim counts), but the rating
@@ -686,7 +661,6 @@ Similarily, we get posterior predictive draws of severities per each
 combination of rating variables.
 
 ```{r}
-
 #' Computes the posterior parameters for the weighted Gamma distribution.
 #'
 #' @param posterior_samples Posterior parameter samples from the Stan model.
@@ -740,7 +714,7 @@ dim(simulate_severity) <- dim(pg_posterior_samples$severity_samples)
 posterior_pred_check(
 	simulate_severity,
 	y = data_with_severity$severity,
-	n = 5000,
+	n = 50,
 	variable = "severity (sqrt scaled)",
 	limits = c(0, 40000)
 	)
@@ -765,7 +739,6 @@ Ultimately, however, the goal is the pure premium since our relativities
 are based on these quantities.
 
 ### Posterior Predictive Check - Pure Premium
-
 ```{r Posterior Predictive Check - PP}
 simulate_pure_premium <- (
 	claim_count_posterior_pred / exp(pg_posterior_samples$exposures)
@@ -776,7 +749,7 @@ simulate_pure_premium <- (
 posterior_pred_check(
 	simulate_pure_premium,
 	y = data_with_severity$observed_pp,
-	n = 3000,
+	n = 50,
 	variable = "pure premium (sqrt scaled)",
 	limits = c(0, 4000)
 )
@@ -793,7 +766,6 @@ Otherwise, the generative model at least has the right shape, for the
 most part.
 
 ```{r remove objects, include = FALSE}
-
 rm(
 	claim_count_posterior_pred, fit_poisson_gamma, pg_posterior_samples,
 	posterior_sev_samples_pg, simulate_pure_premium, simulate_severity
@@ -829,7 +801,6 @@ NegativeBinomial2).
 Compiling the model above in Stan:
 
 ```{stan output.var = "nb_gamma"}
-
 data {
   int<lower=1> Nobs;
   int<lower=1> Nvar;
@@ -874,7 +845,6 @@ model {
 Now we sample from the posterior distribution as required:
 
 ```{r Sample from Posterior - NB/Gamma}
-
 if (refit == TRUE) {
 	
 	fit_nb_gamma <- sampling(
@@ -914,7 +884,6 @@ dispersion_frequency_nb <- matrix(
 We again simulate observations from the posterior predictive.
 
 ```{r}
-
 # Frequency
 set.seed(200350623)
 claim_count_posterior_pred_nb <- rnbinom(
@@ -950,7 +919,6 @@ simulate_pure_premium_nb <- (
 Next, complete the posterior predictive checks as before:
 
 ```{r}
-
 results <- mapply(
 	posterior_pred_check,
 	posterior_predictive_samples = list(
@@ -969,7 +937,7 @@ results <- mapply(
 			"pure premium (sqrt scaled)"
 			),
 	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
-	MoreArgs = list(n = 3000),
+	MoreArgs = list(n = 50),
 	SIMPLIFY = FALSE
 	)
 
@@ -978,7 +946,6 @@ results <- mapply(
 Finally:
 
 ```{r, fig.align="center", fig.height=6, fig.width=10}
-
 (results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
 	title = "Posterior Predictive Check - Negative Binomial Frequency"
 )
@@ -1201,7 +1168,7 @@ results <- mapply(
 			"pure premium (sqrt scaled)"
 			),
 	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
-	MoreArgs = list(n = 3000),
+	MoreArgs = list(n = 50),
 	SIMPLIFY = FALSE
 	)
 ```
@@ -1209,7 +1176,6 @@ results <- mapply(
 Like before:
 
 ```{r, fig.align="center", fig.height=6, fig.width=10}
-
 (results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
 	title = "Posterior Predictive Check - Log-normal Severity"
 )
@@ -1425,7 +1391,7 @@ results <- mapply(
 			"pure premium (sqrt scaled)"
 			),
 	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
-	MoreArgs = list(n = 3000),
+	MoreArgs = list(n = 50),
 	SIMPLIFY = FALSE
 	)
 ```
@@ -1433,11 +1399,9 @@ results <- mapply(
 Like before:
 
 ```{r, fig.align="center", fig.height=6, fig.width=10}
-
 (results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
 	title = "Posterior Predictive Check - Inverse-gaussian Severity"
 )
-
 ```
 
 Overall, the fit looks surprisingly better than the lognormal and
@@ -1453,7 +1417,6 @@ rm(
 	sm_nb_ig, simulate_pure_premium_IG, simulate_severity_IG, 
 	claim_count_posterior_pred_nb, sm_nb_lognormal
 	)
-
 ```
 
 ## The Random Crossed Effects Model
@@ -1488,10 +1451,29 @@ allows for better inferences, if desired.
 
 ### The Generative Random Effects Model
 
+The full generative model is given below:
+
+$$\forall X_{i} >0, N_{i} \in N_{0},$$
+$$X_{i} \big|N_{i}, \phi, \mu_{i} \sim \text{Inverse Gaussian}\left(\mu_{i}, \frac{N_{i}}{\phi}\right),$$
+
+$$\mu_{i} \big| \beta, \vec{b} = exp(\beta + b_{ij} + b_{ik} + b_{il} + b_{im}),$$
+$$\beta \sim \text{Normal}(0, 7),$$
+$$\vec{b} \big| \sigma^2 \sim \text{MVN}(\vec{0}, \sigma^2),$$
+$$\sigma^2 = \begin{bmatrix}\sigma_j^2 & 0 & 0 & 0\\0 & \sigma_{k}^2\ & 0 & 0\\ 0 & 0 & \sigma_{l}^2 & 0 \\ 0 & 0 & 0 \ & \sigma_{m}^2 \end{bmatrix},$$
+$$N_{i} \big|\xi_{i}, \nu \sim \text{Negative Binomial}(\xi_{i}, \nu),$$
+$$\xi_{i} \big|\psi, \vec{t} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
+$$\vec{t} \big| \tau^2 \sim \text{MVN}(\vec{0}, \tau^2),$$
+$$\tau^2 = \begin{bmatrix}\tau_j^2 & 0 & 0 & 0\\0 & \tau_{k}^2\ & 0 & 0\\ 0 & 0 & \tau_{l}^2 & 0 \\ 0 & 0 & 0 \ & \tau_{m}^2 \end{bmatrix},$$
+$$\psi \sim Normal(0, 6),$$
+$$\phi \sim \text{Half-Cauchy}(0, 8),$$
+$$\nu \sim \text{Half-Cauchy}(0, 15),$$
+$$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)},$$
+$$\tau_{[jklm]}^2 \sim \text{Half Student's T(3, 0, 2.5)},$$
+where j, k, l, and m are the kilometre, zone, bonus, and make rating levels for the ith rating combination.
+
 ### Random Crossed Effects Generative Model
 
 ```{stan output.var="sm_random_effects"}
-
 functions {
 
 /* This is just the observed loglikelihood of the IG, with additive constants
@@ -1665,7 +1647,6 @@ data_re <- list(
 Sampling from the posterior again:
 
 ```{r}
-
 if (refit == TRUE) {
 
 	fit_re <- sampling(
@@ -1715,14 +1696,12 @@ re_samples <- rstan::extract(
 		"sev_re_make"
 		)
 	)
-
 ```
 
 Computing the required posterior parameters for the frequency distribution,
 and then generating posterior predictive samples:
 
 ```{r}
-
 nb_mu <- matrix(
 	data = re_samples$mu_freq, nrow = 18000, ncol = nrow(data_with_severity)
 	) + 
@@ -1751,7 +1730,6 @@ claim_count_posterior_pred_nb <- rnbinom(
 	)
 
 dim(claim_count_posterior_pred_nb) <- dim(nb_mu)
-
 ```
 
 ```{r}
@@ -1792,7 +1770,6 @@ posterior_predictive_pp <- claim_count_posterior_pred_nb /
 		ncol = nrow(data_with_severity),
 		byrow = TRUE
 	) * severity_posterior_predictive
-
 ```
 
 Finally:
@@ -1816,20 +1793,19 @@ results <- mapply(
 			"pure premium (sqrt scaled)"
 			),
 	limits = list(c(0, 700), c(0, 40000), c(0, 4000)),
-	MoreArgs = list(n = 3000),
+	MoreArgs = list(n = 50),
 	SIMPLIFY = FALSE
 	)
 ```
 
 ```{r, fig.align="center", fig.height=6, fig.width=10}
-
 (results[[1]] | results[[2]]) / results[[3]] + plot_annotation(
 	title = "Posterior Predictive Check - Random Effects Model"
 )
-
 ```
 
-Overall, there is a marginal improvement particularly at pure premium regions of low density. However, it is debatable in this case if we are seeing massive improvement here especially when we consider that the random effects model takes longer to sample. This isn't really that surprising, however. The rating combinations corresponding with the most frequent pure premium values are made up of many exposures and claims, causing small within group variation (this is explicitly formulated in both generative models) and therefore less pooling.
+Overall, we can see some improvement particularly at pure premium regions of low density. The variability is noticeably wider than the previous model in certain regions of the pure premium density, while regions of high density are left basically unchanged from the previous unpooled model.
 
-##
+This isn't really that surprising. The rating combinations corresponding with the most frequent pure premium values are made up of many exposures and claims, causing small within group variation (this is explicitly formulated in both generative models) and therefore less pooling.
 
+## Relativities
