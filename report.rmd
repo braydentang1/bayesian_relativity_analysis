@@ -1458,11 +1458,11 @@ $$\forall X_{i} >0, N_{i} \in N_{0},$$
 $$X_{i_{jklm}} \big|N_{i_{jklm}}, \phi, \mu_{i_{jklm}} \sim \text{Inverse Gaussian}\left(\mu_{i_{jklm}}, \frac{N_{i_{jklm}}}{\phi}\right),$$
 
 $$\mu_{i_{jklm}} \big| \beta, b_{ij}, b_{ik}, b_{il}, b_{im}  = exp(\beta + b_{ij} + b_{ik} + b_{il} + b_{im}),$$
-$$b_{i_{[jklm]}} \sim \text{Normal}(0, \sigma_{i_{[jklm]}}^2),$$
+$$b_{i_{[jklm]}} \sim \text{Normal}(0, \sigma_{[jklm]}^2),$$
 $$\beta \sim \text{Normal}(0, 7),$$
 $$N_{i_{jklm}} \big|\xi_{i_{jklm}}, \nu \sim \text{Negative Binomial}(\xi_{i_{jklm}}, \nu),$$
 $$\xi_{i_{[jklm]}} \big|\psi, t_{ij}, t_{ik}, t_{il}, t_{im} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
-$$t_{i_{[jklm]}} \sim \text{Normal}(0, \tau_{i_{[jklm]}}^2),$$
+$$t_{i_{[jklm]}} \sim \text{Normal}(0, \tau_{[jklm]}^2),$$
 $$\psi \sim \text{Normal}(0, 6),$$
 $$\phi \sim \text{Half-Cauchy}(0, 8),$$
 $$\nu \sim \text{Half-Cauchy}(0, 15),$$
