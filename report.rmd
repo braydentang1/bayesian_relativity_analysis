@@ -532,13 +532,14 @@ extract_and_get_posterior_samples <- function(fitted_model, exposures, X) {
 		dispersion_severity_samples <- samples$dispersion_severity
 	}
 	
-	list(
+	return(list(
 		frequency_samples = samples$beta_frequency %*% t(as.matrix.data.frame(X)) + 
 			exposure,
 		severity_samples = samples$beta_severity %*% t(as.matrix.data.frame(X)),
 		dispersion_frequency_samples = dispersion_frequency_samples,
 		dispersion_severity_samples = dispersion_severity_samples,
 		exposures = exposure
+		)
 	)
 	
 }
@@ -691,7 +692,7 @@ sample_weighted_gamma <- function(
 	rates_posterior <- posterior_predictive_claim_counts /
 		(posterior_samples$severity_samples * dispersion_severity_posterior)
 	
-	list(shapes = shapes_posterior, rates = rates_posterior)
+	return(list(shapes = shapes_posterior, rates = rates_posterior))
 	
 	}
 
@@ -1419,7 +1420,7 @@ rm(
 	)
 ```
 
-## The Random Crossed Effects Model
+## The Random Crossed Effects Model (hierarchical Bayes)
 
 All of the models above have their parameters estimated using only
 observations that are relevant to that parameter. For example, only
@@ -1453,17 +1454,15 @@ allows for better inferences, if desired.
 
 The full generative model is given below:
 
-$$\forall X_{i} >0, N_{i} \in N_{0},$$
-$$X_{i} \big|N_{i}, \phi, \mu_{i} \sim \text{Inverse Gaussian}\left(\mu_{i}, \frac{N_{i}}{\phi}\right),$$
+$$\forall X_{i} >0, N_{i} \in N_{0},$$ 
+$$X_{i_{jklm}} \big|N_{i_{jklm}}, \phi, \mu_{i_{jklm}} \sim \text{Inverse Gaussian}\left(\mu_{i_{jklm}}, \frac{N_{i_{jklm}}}{\phi}\right),$$
 
-$$\mu_{i} \big| \beta, \vec{b} = exp(\beta + b_{ij} + b_{ik} + b_{il} + b_{im}),$$
+$$\mu_{i_{jklm}} \big| \beta, b_{ij}, b_{ik}, b_{il}, b_{im}  = exp(\beta + b_{ij} + b_{ik} + b_{il} + b_{im}),$$
+$$b_{i_{[jklm]}} \sim \text{Normal}(0, \sigma_{i_{[jklm]}}^2),$$
 $$\beta \sim \text{Normal}(0, 7),$$
-$$\vec{b} \big| \sigma^2 \sim \text{MVN}(\vec{0}, \sigma^2),$$
-$$\sigma^2 = \begin{bmatrix}\sigma_j^2 & 0 & 0 & 0\\0 & \sigma_{k}^2\ & 0 & 0\\ 0 & 0 & \sigma_{l}^2 & 0 \\ 0 & 0 & 0 \ & \sigma_{m}^2 \end{bmatrix},$$
-$$N_{i} \big|\xi_{i}, \nu \sim \text{Negative Binomial}(\xi_{i}, \nu),$$
-$$\xi_{i} \big|\psi, \vec{t} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
-$$\vec{t} \big| \tau^2 \sim \text{MVN}(\vec{0}, \tau^2),$$
-$$\tau^2 = \begin{bmatrix}\tau_j^2 & 0 & 0 & 0\\0 & \tau_{k}^2\ & 0 & 0\\ 0 & 0 & \tau_{l}^2 & 0 \\ 0 & 0 & 0 \ & \tau_{m}^2 \end{bmatrix},$$
+$$N_{i_{jklm}} \big|\xi_{i_{jklm}}, \nu \sim \text{Negative Binomial}(\xi_{i_{jklm}}, \nu),$$
+$$\xi_{i_{[jklm]}} \big|\psi, t_{ij}, t_{ik}, t_{il}, t_{im} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
+$$t_{i_{[jklm]}} \sim \text{Normal}(0, \tau_{i_{[jklm]}}^2),$$
 $$\psi \sim \text{Normal}(0, 6),$$
 $$\phi \sim \text{Half-Cauchy}(0, 8),$$
 $$\nu \sim \text{Half-Cauchy}(0, 15),$$
@@ -1809,3 +1808,77 @@ Overall, we can see some improvement particularly at pure premium regions of low
 This isn't really that surprising. The rating combinations corresponding with the most frequent pure premium values are made up of many exposures and claims, causing small within group variation (this is explicitly formulated in both generative models) and therefore less pooling.
 
 ## Relativities
+
+Assuming that the hierarchical Bayesian model above is sufficient, we can calculate relativities by using the simulated pure premiums from the model above.
+
+As mentioned previously, a base class (the class where all other rating combinations are compared against) is required. In the data, this corresponds to the rating combination corresponding to row `r which(data$vehicle_exposure_years == max(data$vehicle_exposure_years))` (1 = km, 4 = zone, 7 = bonus, 9 = make).
+
+We can now calculate posterior distributions for the relativities for each rating variable.
+
+```{r}
+base_class_row <- which(
+	data$vehicle_exposure_years == max(data$vehicle_exposure_years)
+	)
+
+find_rels <- function(column_indices, posterior_pred_pp, base_class_row) {
+	
+	posterior_premium <- posterior_predictive_pp[, column_indices]
+	
+	relativities <- posterior_premium /
+		posterior_premium[, which(column_indices == base_class_row)]
+	
+	return(relativities)
+}
+
+```
+
+### Kilometers
+
+```{r}
+# Get the column indices of the needed pure premium distributions
+desired_km_columns <- which(
+	data$zone == 4 & data$bonus == 7 & data$make == 9
+)
+
+km_rels <- as_tibble(find_rels(
+	column_indices = desired_km_columns,
+	posterior_pred_pp = posterior_predictive_pp,
+	base_class_row = base_class_row
+	)) 
+
+colnames(km_rels) <- paste("Level", 1:ncol(km_rels))
+
+```
+
+We can plot the posterior distribution of relativities for each non-base rating level:
+
+```{r}
+
+error_bars <- tibble(
+	Level = paste("Level", 1:ncol(km_rels)),
+	lower = apply(km_rels, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
+	upper = apply(km_rels, MARGIN = 2, FUN = function(x) quantile(x, 0.95))
+) %>%
+	filter(Level != "Level 1")
+
+km_rels %>%
+	gather(key = "Level", value = "Relativity") %>%
+	filter(Level != "Level 1") %>%
+ggplot(data = ., aes(x = Level, y = Relativity)) + 
+	geom_violin() +
+	theme_bw() +
+	labs(title = "Kilometre Relativity Densities") +
+	geom_errorbar(
+		data = error_bars,
+		mapping = aes(x = Level, ymin = lower, ymax = upper), 
+		width = 0.2,
+		inherit.aes = FALSE
+		) +
+	coord_flip() +
+	stat_summary(fun.y = median, geom = "point", size = 2, color = "red") 
+
+```
+
+
+### Zone
+
