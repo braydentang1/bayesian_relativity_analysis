@@ -60,7 +60,7 @@ robust.
 
 ## Relativities
 
-Relativities are simply the marginal impact a particular rating variable
+Relativities are simply the **marginal** impact a particular rating variable
 has on the response. This has the exact same interpretation as
 regression coefficients do in a multivariate linear model - holding all
 other variables constant, the regression coefficient represents the
@@ -168,18 +168,9 @@ Third, each row will become more sparse as well due to the curse of
 dimensionality, with some combinations of rating variables simply having
 zero claims or exposures. Naturally, this will lead to ill-defined
 models - the traditional gamma won't work, for example, since we will
-have exact zero losses. In the case of frequency distributions, there
-may also be particular levels of a rating variable that simply have zero
-exposures. This typically arises when a particular level that originally
-had some exposures many years ago decreases over time to the point where
-it no longer has any exposures (suppose a vehicle color simply ceases to
-exist within a book of business). Normally, this level can simply be
-dropped, but what happens when all of a sudden the exposure reappears in
-the future? Our data is a single realization of some reality, but there
-is of course **uncertainty**. It could be by pure chance that we
-observed zero exposures.
+have exact zero losses. 
 
-Another solution to the above problem is to group the sparse level of
+One solution to the above problem is to group the sparse level of
 the rating variable with another to remove this sparsity. This seems
 harmless, but in reality this corresponds to a deceivingly strong prior,
 namely that the effects of each level on the response are the same. In
@@ -1432,18 +1423,20 @@ rating combinations are sparse.
 
 A common practice is to simply group specific levels together to get rid
 of this sparsity (discussed in "The Dataset"). However, as mentioned
-previously this decision corresponds directly with assuming a incredibly
+previously this decision corresponds directly with assuming an incredibly
 strong prior assumption which is not transparent.
 
 Instead of committing to these post-hoc methods, we can instead take
 advantage of partial pooling in which sparse rating combinations will
 have their estimates computed as a weighted average between the global
 average over all combinations and the individual estimate, where the
-weighting depends on the amount of data and the observed variation per
-each combination. This is often interpreted as a way to induce the
-sharing of information over different levels of particular rating
-variables. In the actuarial world, this is a very similar idea to
-credibility theory but in a less ad-hoc fashion.
+weighting depends on the variation **between** rating levels,
+the amount of variance **within** a level, and the amount of 
+data that make up a level (though in this case, the amount of data per each level
+influences the amount of variation within a level to control pooling instead, due to the use of weighting in the models to address issues with data aggregation). This is often interpreted as a way to induce the sharing of 
+information over different levels of particular rating variables. 
+In the actuarial world, this is a very similar idea to credibility theory but
+credibility is often applied in an ad-hoc fashion.
 
 In addition, the variation between rating levels accounts for extra
 variation between (and not just within each level) each individual level
@@ -1455,13 +1448,13 @@ allows for better inferences, if desired.
 The full generative model is given below:
 
 $$\forall X_{i} >0, N_{i} \in N_{0},$$ 
-$$X_{i_{jklm}} \big|N_{i_{jklm}}, \phi, \mu_{i_{jklm}} \sim \text{Inverse Gaussian}\left(\mu_{i_{jklm}}, \frac{N_{i_{jklm}}}{\phi}\right),$$
+$$X_{i_{jklm}} \ \big| \ N_{i_{jklm}}, \phi, \mu_{i_{jklm}} \sim \text{Inverse Gaussian}\left(\mu_{i_{jklm}}, \frac{N_{i_{jklm}}}{\phi}\right),$$
 
-$$\mu_{i_{jklm}} \big| \beta, b_{ij}, b_{ik}, b_{il}, b_{im}  = exp(\beta + b_{ij} + b_{ik} + b_{il} + b_{im}),$$
+$$\mu_{i_{jklm}} \ \big| \ \beta, b_{ij}, b_{ik}, b_{il}, b_{im}  = exp(\beta + b_{ij} + b_{ik} + b_{il} + b_{im}),$$
 $$b_{i_{[jklm]}} \sim \text{Normal}(0, \sigma_{[jklm]}^2),$$
 $$\beta \sim \text{Normal}(0, 7),$$
-$$N_{i_{jklm}} \big|\xi_{i_{jklm}}, \nu \sim \text{Negative Binomial}(\xi_{i_{jklm}}, \nu),$$
-$$\xi_{i_{[jklm]}} \big|\psi, t_{ij}, t_{ik}, t_{il}, t_{im} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
+$$N_{i_{jklm}} \ \big| \ \xi_{i_{jklm}}, \nu \sim \text{Negative Binomial}(\xi_{i_{jklm}}, \nu),$$
+$$\xi_{i_{[jklm]}} \ \big| \ \psi, t_{ij}, t_{ik}, t_{il}, t_{im} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
 $$t_{i_{[jklm]}} \sim \text{Normal}(0, \tau_{[jklm]}^2),$$
 $$\psi \sim \text{Normal}(0, 6),$$
 $$\phi \sim \text{Half-Cauchy}(0, 8),$$
@@ -1469,6 +1462,19 @@ $$\nu \sim \text{Half-Cauchy}(0, 15),$$
 $$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)},$$
 $$\tau_{[jklm]}^2 \sim \text{Half Student's T(3, 0, 2.5)},$$
 where j, k, l, and m are the kilometre, zone, bonus, and make rating levels for the ith rating combination.
+
+Equivalently, to illustrate the hierarchical structure that is going on:
+
+$$X_{i_{[jklm]}} \ \big| \ \mu_{i_{[jklm]}}, N_{i_{[jklm]}}, \phi \sim \text{Inverse Gaussian}\left(\mu_{i_{[jklm]}}, \frac{N_{i_{[jklm]}}}{\phi}\right),$$
+$$ln(\mu_{i_{[jklm]}}) \ \big| \ \beta, \sigma_{[jklm]}^2 \sim \text{Normal}(\beta, \sigma_{[jklm]}^2),$$
+$$\beta \sim \text{Normal}(0, 7),$$
+$$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)}.$$
+
+The average severity of any particular level of a rating variable comes from the same distribution with a common mean $\beta$ and variance $\sigma^2_{[jklm]}$. $\beta$ is the overall grand mean over all levels of a particular rating variable (which is the average severity ignoring all rating variables in this case). $\sigma^2_{[jklm]}$ represents the observed variation _between_ levels for a particular rating variable. Thus, individual levels within a rating variable are "pulled" towards the overall group mean, acting as additional regularization. More or less shrinkage is induced depending on the variation between levels, the number of observations for a level, and the amount of variance within a level. All rating variables share the same grand mean, since the effects are crossed.
+
+Priors are given to $\beta$ and $\sigma^2$ so that these parameters are inferred from the data. These parameters are inferred using all of the data regardless of the observation's level, which is where the "information sharing" aspect of partial pooling comes into play.
+
+The frequency model for $N_{i_{[jklm]}}$ follows similarly to the above formulation for severity.
 
 ### Random Crossed Effects Generative Model
 
@@ -1807,7 +1813,7 @@ Overall, we can see some improvement particularly at pure premium regions of low
 
 This isn't really that surprising. The rating combinations corresponding with the most frequent pure premium values are made up of many exposures and claims, causing small within group variation (this is explicitly formulated in both generative models) and therefore less pooling.
 
-## Relativities
+## Relativities {.tabset}
 
 Assuming that the hierarchical Bayesian model above is sufficient, we can calculate relativities by using the simulated pure premiums from the model above.
 
@@ -1830,6 +1836,65 @@ find_rels <- function(column_indices, posterior_pred_pp, base_class_row) {
 	return(relativities)
 }
 
+graph_rels <- function(rels, rv_name) {
+	
+	base_level <- which(sapply(X = rels, FUN = function(x) all(x == 1)) == TRUE)
+	
+	error_bars <- tibble(
+		Level = as.character(1:ncol(rels)),
+		median = apply(rels, MARGIN = 2, FUN = function(x) median(x)),
+		lower = apply(rels, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
+		upper = apply(rels, MARGIN = 2, FUN = function(x) quantile(x, 0.95))
+	) %>% 
+		filter(Level != as.character(base_level))
+	
+	graph <- rels %>%
+		gather(key = "Level", value = "Relativity") %>%
+		filter(Level != as.character(base_level)) %>%
+	ggplot(data = ., aes(x = Level, y = Relativity)) + 
+		geom_violin() +
+		theme_bw() +
+		labs(title = paste(rv_name, "Relativity Densities")) +
+		geom_errorbar(
+			data = error_bars,
+			mapping = aes(x = Level, ymin = lower, ymax = upper), 
+			width = 0.2,
+			inherit.aes = FALSE
+			) +
+		coord_flip() +
+		stat_summary(fun.y = median, geom = "point", size = 2, color = "red") +
+		geom_text(
+			data = error_bars,
+			mapping = aes(x = Level, y = median, label = round(median, 2)),
+			vjust = -0.5,
+			size = 4,
+			inherit.aes = FALSE
+		)
+	
+	return(graph)
+	
+}
+
+create_tables <- function(rels, rv_name) {
+	
+	table <- tibble(
+		temp = 1:ncol(rels),
+		`Estimated Relativity (median)` = apply(X = rels, MARGIN = 2, FUN = function(x) median(x)),
+		`Lower 90 Credible Interval` = apply(X = rels, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
+		`Upper 90 Credible Interval` = apply(X = rels, MARGIN = 2, FUN = function(x) quantile(x, 0.95)),
+		`Standard Deviation` = apply(X = rels, MARGIN = 2, FUN = function(x) sd(x))
+	)
+	
+	colnames(table)[1] <- rv_name
+	base_level = which(sapply(X = rels, FUN = function(x) all(x == 1)) == TRUE)
+	
+	table %>%
+		kable(digits = 3) %>%
+		kable_styling() %>%
+		row_spec(base_level, bold = T, color = "white", background = "teal") %>%
+		return()
+	
+}
 ```
 
 ### Kilometers
@@ -1846,39 +1911,121 @@ km_rels <- as_tibble(find_rels(
 	base_class_row = base_class_row
 	)) 
 
-colnames(km_rels) <- paste("Level", 1:ncol(km_rels))
-
+colnames(km_rels) <- 1:ncol(km_rels)
 ```
 
 We can plot the posterior distribution of relativities for each non-base rating level:
 
-```{r}
-
-error_bars <- tibble(
-	Level = paste("Level", 1:ncol(km_rels)),
-	lower = apply(km_rels, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
-	upper = apply(km_rels, MARGIN = 2, FUN = function(x) quantile(x, 0.95))
-) %>%
-	filter(Level != "Level 1")
-
-km_rels %>%
-	gather(key = "Level", value = "Relativity") %>%
-	filter(Level != "Level 1") %>%
-ggplot(data = ., aes(x = Level, y = Relativity)) + 
-	geom_violin() +
-	theme_bw() +
-	labs(title = "Kilometre Relativity Densities") +
-	geom_errorbar(
-		data = error_bars,
-		mapping = aes(x = Level, ymin = lower, ymax = upper), 
-		width = 0.2,
-		inherit.aes = FALSE
-		) +
-	coord_flip() +
-	stat_summary(fun.y = median, geom = "point", size = 2, color = "red") 
-
+```{r, fig.align='center'}
+graph_rels(km_rels, rv_name = "Kilometres")
 ```
 
+The above plot in table format, with base class highlighted in blue:
+
+```{r}
+create_tables(km_rels, "Kilometres")
+```
+
+In this case, we can see that the estimated relativities (the median of each posterior predictive distribution) follows a monotonic pattern and likely no adjustment would be used here. 
+
+However, the point is to emphasize that while our single "best guess" might be 1, 1.231, 1.339, 1.458, and 1.717 
+for a chosen set of relativities, values such as 1, 1.3, 1.6, 1.8, 2 could have reasonably been observed as well. Another set could have been 1, 0.97, 1.4, 1.3, 1.5. These combinations aren't as likely, but plausible given the data.
+
+In addition, notice that rating level 2 contains a relativity of 1 in its 90% credible interval. This implies that there is some probability that level 2 may actually be worse than the base class of level 1, even though our "best guess" would state it as higher. In fact, the posterior probability that the true relativity for level 2 is less than 1 is `r round(mean(km_rels[, 2] < 1), 3)`. Arguably, this is still not that likely (for comparison, the probabilities of the other levels having less than 1 relativity are 0.032, 0.012, and 0.001 for levels 3, 4, and 5, respectively) but it is not trivially 0 either. 
+
+In addition, we can quantify essentially any hypothesis that we want freely. As an example, some questions that the user may be interested in:
+
+- The exact probability that level 2 has a higher relativity than level 3 or 4 or 5:
+
+```{r}
+mean(apply(X = km_rels, MARGIN = 1, FUN = function(x) max(x)) == km_rels[, 2])
+```
+- The exact probability that level 3 exceeds the relativity of level 2 by at least 0.1 (or any arbitrary constant):
+
+```{r}
+mean(km_rels[, 3] - km_rels[, 2] > 0.1)
+```
+Combining these probabilities with the expected costs (if any) of making the "wrong" decision (utilizing business sense and how conservative or aggressive the company wishes to be) can be used to make decisions. 
 
 ### Zone
 
+```{r}
+# Get the column indices of the needed pure premium distributions
+desired_zone_columns <- which(
+	data$kilometres == 1 & data$bonus == 7 & data$make == 9
+)
+
+zone_rels <- as_tibble(find_rels(
+	column_indices = desired_zone_columns,
+	posterior_pred_pp = posterior_predictive_pp,
+	base_class_row = base_class_row
+	)) 
+
+colnames(zone_rels) <- 1:ncol(zone_rels)
+```
+
+```{r, fig.align='center'}
+graph_rels(zone_rels, rv_name = "Zone")
+```
+
+The above plot in a table:
+
+```{r}
+create_tables(zone_rels, "Zone")
+```
+
+### Bonus
+
+```{r}
+# Get the column indices of the needed pure premium distributions
+desired_bonus_columns <- which(
+	data$kilometres == 1 & data$zone == 4 & data$make == 9
+)
+
+bonus_rels <- as_tibble(find_rels(
+	column_indices = desired_bonus_columns,
+	posterior_pred_pp = posterior_predictive_pp,
+	base_class_row = base_class_row
+	)) 
+
+colnames(bonus_rels) <- 1:ncol(bonus_rels)
+```
+
+```{r, fig.align='center'}
+graph_rels(bonus_rels, rv_name = "Bonus")
+```
+
+The above plot in a table:
+
+```{r}
+create_tables(bonus_rels, "Bonus")
+```
+
+### Make
+
+```{r}
+# Get the column indices of the needed pure premium distributions
+desired_make_columns <- which(
+	data$kilometres == 1 & data$zone == 4 & data$bonus == 7
+)
+
+make_rels <- as_tibble(find_rels(
+	column_indices = desired_make_columns,
+	posterior_pred_pp = posterior_predictive_pp,
+	base_class_row = base_class_row
+	)) 
+
+colnames(make_rels) <- 1:ncol(make_rels)
+```
+
+```{r, fig.align='center'}
+graph_rels(make_rels, rv_name = "Make")
+```
+
+The above plot in a table:
+
+```{r}
+create_tables(make_rels, "Make")
+```
+
+## Appendix: Model Convergence Checking
