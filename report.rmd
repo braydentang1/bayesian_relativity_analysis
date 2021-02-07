@@ -1476,7 +1476,7 @@ Priors are given to $\beta$ and $\sigma^2$ so that these parameters are inferred
 
 The frequency model for $N_{i_{[jklm]}}$ follows similarly to the above formulation for severity.
 
-### Stan Code for Random Crossed Effects Model
+### Stan Code and Model Evaluation
 
 ```{stan output.var="sm_random_effects"}
 functions {
