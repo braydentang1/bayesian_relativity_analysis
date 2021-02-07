@@ -1879,10 +1879,18 @@ create_tables <- function(rels, rv_name) {
 	
 	table <- tibble(
 		temp = 1:ncol(rels),
-		`Estimated Relativity (median)` = apply(X = rels, MARGIN = 2, FUN = function(x) median(x)),
-		`Lower 90 Credible Interval` = apply(X = rels, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
-		`Upper 90 Credible Interval` = apply(X = rels, MARGIN = 2, FUN = function(x) quantile(x, 0.95)),
-		`Standard Deviation` = apply(X = rels, MARGIN = 2, FUN = function(x) sd(x))
+		`Estimated Relativity (median)` = apply(
+			X = rels, MARGIN = 2, FUN = function(x) median(x)
+			),
+		`Lower 90 Credible Interval` = apply(
+			X = rels, MARGIN = 2, FUN = function(x) quantile(x, 0.05)
+			),
+		`Upper 90 Credible Interval` = apply(
+			X = rels, MARGIN = 2, FUN = function(x) quantile(x, 0.95)
+			),
+		`Standard Deviation` = apply(
+			X = rels, MARGIN = 2, FUN = function(x) sd(x)
+			)
 	)
 	
 	colnames(table)[1] <- rv_name
