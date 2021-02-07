@@ -1466,7 +1466,7 @@ where j, k, l, and m are the kilometre, zone, bonus, and make rating levels for 
 Equivalently, to illustrate the hierarchical structure that is going on:
 
 $$X_{i_{[jklm]}} \ \big| \ \mu_{i_{[jklm]}}, N_{i_{[jklm]}}, \phi \sim \text{Inverse Gaussian}\left(\mu_{i_{[jklm]}}, \frac{N_{i_{[jklm]}}}{\phi}\right),$$
-$$ln(\mu_{i_{[jklm]}}) \ \big| \ \beta, \sigma_{[jklm]}^2 \sim \text{Normal}(\beta, \sigma_{[jklm]}^2),$$
+$$log(\mu_{i_{[jklm]}}) \ \big| \ \beta, \sigma_{[jklm]}^2 \sim \text{Normal}(\beta, \sigma_{[jklm]}^2),$$
 $$\beta \sim \text{Normal}(0, 7),$$
 $$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)}.$$
 
@@ -1476,7 +1476,7 @@ Priors are given to $\beta$ and $\sigma^2$ so that these parameters are inferred
 
 The frequency model for $N_{i_{[jklm]}}$ follows similarly to the above formulation for severity.
 
-### Random Crossed Effects Generative Model
+### Stan Code for Random Crossed Effects Model
 
 ```{stan output.var="sm_random_effects"}
 functions {
@@ -1905,7 +1905,7 @@ create_tables <- function(rels, rv_name) {
 }
 ```
 
-### Kilometers
+### Kilometres
 
 ```{r}
 # Get the column indices of the needed pure premium distributions
@@ -1946,7 +1946,20 @@ In addition, we can quantify essentially any hypothesis that we want freely. As 
 - The exact probability that level 2 has a higher relativity than level 3 or 4 or 5:
 
 ```{r}
-mean(apply(X = km_rels, MARGIN = 1, FUN = function(x) max(x)) == km_rels[, 2])
+mean(!apply(
+	X = km_rels[, 2:5],
+	MARGIN = 1,
+	FUN = function(x) min(x)) == km_rels[, 2]
+	)
+```
+- The exact probability that level 2 has a higher relativity than level 3 and 4 and 5:
+
+```{r}
+mean(apply(
+	X = km_rels[, 2:5],
+	MARGIN = 1,
+	FUN = function(x) max(x)) == km_rels[, 2]
+	)
 ```
 - The exact probability that level 3 exceeds the relativity of level 2 by at least 0.1 (or any arbitrary constant):
 
