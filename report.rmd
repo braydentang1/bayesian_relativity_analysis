@@ -240,12 +240,9 @@ inevitably affects the variance of the pure premium.
 In addition, other sources of variation, such as parameter and residual uncertainty, 
 are ignored. 
 
-Viewing frequency and severity as random variables, and as a
-consequence, viewing pure premiums and relativities as random variables,
-is where Bayesian modeling will allow us to quantify the full amount of
-uncertainty in our data. This will allow actuaries to actually choose
-reasonable values that are in line with the amount of uncertainty that
-they have apriori and within the data. In addition, it allows actuaries
+Bayesian modeling will allow us to quantify the vast majority of
+uncertainty in our data. By modeling the data as a generative process instead, we can account for nearly all sources of variation that are ignored in the traditional, frequentist approach. As a result, actuaries will have the ability to choose
+reasonable values that are in line with the amount of uncertainty that exists. In addition, it allows actuaries
 to quantify their confidence in allowing for a non-monotonic relativity,
 giving them the ability to defend their decisions.
 
@@ -1818,7 +1815,7 @@ This isn't really that surprising. The rating combinations corresponding with th
 
 Assuming that the hierarchical Bayesian model above is sufficient, we can calculate relativities by using the simulated pure premiums from the model above.
 
-As mentioned previously, a base class (the class where all other rating combinations are compared against) is required. In the data, this corresponds to the rating combination corresponding to row `r which(data$vehicle_exposure_years == max(data$vehicle_exposure_years))` (1 = km, 4 = zone, 7 = bonus, 9 = make).
+As mentioned previously, a base class (the class where all other rating combinations are compared against) is required. In the data, this corresponds to the rating combination corresponding to row `r which(data$vehicle_exposure_years == max(data$vehicle_exposure_years))` (1 = km, 4 = zone, 7 = bonus, 9 = make) as this rating combination has the largest number of exposures. 
 
 We can now calculate posterior distributions for the relativities for each rating variable.
 
