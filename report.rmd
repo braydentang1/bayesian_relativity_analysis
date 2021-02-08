@@ -170,8 +170,8 @@ zero claims or exposures. Naturally, this will lead to ill-defined
 models - the traditional gamma won't work, for example, since we will
 have exact zero losses. 
 
-One solution to the above problem is to group the sparse level of
-the rating variable with another to remove this sparsity. This seems
+One solution to the sparsity problem is to group the sparse level of
+the rating variable with another. This seems
 harmless, but in reality this corresponds to a deceivingly strong prior,
 namely that the effects of each level on the response are the same. In
 math, this corresponds to setting
@@ -204,41 +204,41 @@ policyholders.
 
 ## Post-Adjustments
 
-The model is not perfect and there is an acceptance that the models may
-be overfit to the data, leading to relativites that are not reflective
-of the actual relativites. This often leads to actuaries manually
-adjusting relativites to be more in line with what their apriori beliefs
-are. For example, a vehicle with a larger engine would be expected to be
-of higher risk than a vehicle with a smaller engine since presumably the
-vehicles with larger engines are more expensive on average. Sometimes,
-the relativities produced do not reflect this and so an actuary may
-decide to "manually" adjust the values to smooth said estimates. This is
-often done out of respect for the customer who may not appreciate being
+Traditionally, generalized linear models (Poisson and gamma linear models in particular)
+are used to predict the frequency and severity of claims. These models produce the expected frequency
+and severity of a particular rating combination, and assuming independence, these expectations
+are multiplied together to get the expected pure premium. 
+
+However, any models used to predict the frequency and severity of claims is
+susceptible to overfitting, leading to relativities that are possibly overstated or understated. 
+This often leads to actuaries manually adjusting relativities to be more 
+in line with what their apriori beliefs are. For example, a vehicle with a
+larger engine would be expected to be of higher risk than a vehicle with a
+smaller engine since presumably the vehicles with larger engines are more
+expensive on average. Sometimes, the relativities produced do not reflect this due to
+uncertainty/variance and so an actuary may decide to "manually" adjust the values to smooth said estimates.
+This is often done out of respect for the customer who may not appreciate being
 charged more in premium when they perceive themselves as lower risk.
 Depending on the actuary, they may just adjust relativities that are not
 monotonic.
 
-While this approach may sound sketchy, I believe there may actually be
-merit to it in the sense that the relationship that is expected, or, a
-reasonable compromise to the prior belief **is** actually in the data
-once we consider the amount of uncertainty that exists within the data.
-This is essentially what this manual adjustment is trying to account
-for, accepting that the data has some degree of noise and may not be
-fully reliable.
-
-However, the adjustment is arbitrary if we do not actually know how much
-uncertainty we are dealing with. In the case of traditional pricing
+However, these adjustments are arbitrary if we do not actually know how much
+uncertainty there is in the estimates. In the case of traditional pricing
 modeling, it is difficult to actually quantify how much uncertainty we
 are dealing with because the frequency and severity models are estimated
 completely independently of each other. The expectations produced by
 each individual model are used to produce the pure premiums, which are
-then used to calculate relativities.
+then used to calculate relativities.  
 
 However, it is clear that if we view frequency and severity as random
 variables that they are not independent. If we have a zero frequency, we
 must have a zero severity (or equivalently, if we have observed claims
 we must have non-zero severity, assuming that claims below a deductible
-are ignored). Estimating both models separately ignores this.
+are ignored). Estimating both models separately ignores this dependence which
+inevitably affects the variance of the pure premium.
+
+In addition, other sources of variation, such as parameter and residual uncertainty, 
+are ignored. 
 
 Viewing frequency and severity as random variables, and as a
 consequence, viewing pure premiums and relativities as random variables,
@@ -745,7 +745,6 @@ posterior_pred_check(
 	variable = "pure premium (sqrt scaled)",
 	limits = c(0, 4000)
 )
-
 ```
 
 The "spikes" in the distribution are not as extreme as what is observed
@@ -1427,13 +1426,15 @@ previously this decision corresponds directly with assuming an incredibly
 strong prior assumption which is not transparent.
 
 Instead of committing to these post-hoc methods, we can instead take
-advantage of partial pooling in which sparse rating combinations will
+advantage of partial pooling. All levels will
 have their estimates computed as a weighted average between the global
-average over all combinations and the individual estimate, where the
-weighting depends on the variation **between** rating levels,
+estimate over all levels and their individual estimate, where the
+weighting depends on the variation **between** all rating levels,
 the amount of variance **within** a level, and the amount of 
 data that make up a level (though in this case, the amount of data per each level
-influences the amount of variation within a level to control pooling instead, due to the use of weighting in the models to address issues with data aggregation). This is often interpreted as a way to induce the sharing of 
+influences the amount of variation within a level to control pooling instead,
+due to the use of weighting in the models to address issues with data aggregation). 
+This is often interpreted as a way to induce the sharing of 
 information over different levels of particular rating variables. 
 In the actuarial world, this is a very similar idea to credibility theory but
 credibility is often applied in an ad-hoc fashion.
@@ -1894,7 +1895,7 @@ create_tables <- function(rels, rv_name) {
 	)
 	
 	colnames(table)[1] <- rv_name
-	base_level = which(sapply(X = rels, FUN = function(x) all(x == 1)) == TRUE)
+	base_level <- which(sapply(X = rels, FUN = function(x) all(x == 1)) == TRUE)
 	
 	table %>%
 		kable(digits = 3) %>%
