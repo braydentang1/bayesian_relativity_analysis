@@ -118,7 +118,7 @@ For example, suppose the base class pure premium (the premium for a
 policyholder who drives in the medium city and has a vehicle with
 50,001-100,000km) is \$1000. Then, the pure premium for a policyholder
 who drives in the small city with a vehicle that has more than 100,000km
-of mileage has a pure premium of \$1000 \* 0.95 \* 1.378 = '\$1309.10.
+of mileage has a pure premium of \$1000 \* 0.95 \* 1.378 = \$1309.10.
 
 ## The Dataset
 
@@ -248,7 +248,7 @@ giving them the ability to defend their decisions.
 
 ## The Bayesian/Generative Model
 
-I describe the fully generative model below:
+We describe the fully generative model below:
 
 Let $X$ be the severity random variable, $R_{i}$ be the rating
 variables, and $N$ be the claim counts. Assume that exposures are a
@@ -355,8 +355,8 @@ combination of rating variables. Thus, the ELPD on the held out rating
 combination will be estimated through extrapolation, which is not true
 to how the model will behave in reality.
 
-Unfortunately, I still haven't figured out a great way to solve this
-issue. The only alternative may be to perform posterior predictive
+Unfortunately, it is unclear how to obtain absolute measures of predictive performance. 
+The only alternative may be to perform posterior predictive
 checks, but these are known to be biased for predictive performance
 because this involves in-sample data. Despite this, [some do suggest the use of 50% credible intervals to at least detect overfitting.](https://stats.stackexchange.com/questions/343420/bayesian-thinking-about-overfitting)
 
@@ -367,12 +367,12 @@ Regardless, none of this allows for the ability to quantify how well the model a
 
 ## Stan Code
 
-Below is the exact same model I described above. In this case, I set
+Below is the exact same model described above. In this case, we set
 $\tau$ and $\omega$ to 5 and 5.5, respectively, which are "weakly informative" priors.
-I don't really have strong apriori beliefs regarding the effects (I really have no context regarding the data)
-but I still want enough regularization to shrink effects to 0, if it is justifiable.
+No strong apriori beliefs regarding the effects exist (there is no context regarding the data)
+but regularization to shrink effects to 0, if it is justifiable, is desired.
 
-For the variance parameter, I set $\alpha$ to 8. This is again a weakly informative prior.
+The variance parameter, $\alpha$, is set to 8. This is again a weakly informative prior.
 
 ```{stan output.var = "poisson_gamma_model"}
 data {
@@ -411,7 +411,7 @@ model {
 
 ```
 
-Next, I preprocess the data in a suitable format for Stan.
+Next, preprocess the data in a suitable format for Stan.
 
 ```{r Preprocessing}
 data_with_severity <- data %>%
@@ -600,8 +600,7 @@ the model will very likely not predict well.
 
 ### Posterior Predictive Check - Frequency
 
-First, I generate samples from the posterior predictive distribution. 
-I then perform the posterior predictive check (i.e. compare the generated data against the observed data).
+First, generate samples from the posterior predictive distribution. Then, perform the posterior predictive check (i.e. compare the generated data against the observed data).
 
 ```{r Generate Samples}
 # Basically, flatten the matrix of frequencies to a vector, generate a vector 
@@ -744,7 +743,7 @@ posterior_pred_check(
 )
 ```
 
-The "spikes" in the distribution are not as extreme as what is observed
+The "peaks" in the distribution are not as extreme as what is observed
 in the data. The black curve does not fall in the blue region in
 important areas of the distribution, namely the single peak. Thus, under
 the generative model the observed data is simply not probable in some
@@ -974,7 +973,8 @@ the gamma.
 ### Log-normal
 
 The log-normal distribution is known to have heavier tails than the
-gamma distribution.
+gamma distribution. This can be shown by calculating the limit of the ratio of survival
+functions.
 
 Stan actually has a log-normal distribution built in. However, it is
 difficult to work with the log-normal distribution when linking the
@@ -1170,7 +1170,7 @@ Like before:
 
 ```
 
-The fit is mixed, as we expected. There is clearly more mass being put
+The fit for severity is mixed, as we expected. There is clearly more mass being put
 towards the tail and less towards small severity amounts which has
 improved the fit dramatically in this region. However, more density has
 been allocated to the larger severity amounts as a consequence which has
@@ -1194,8 +1194,7 @@ rm(
 ### Inverse-Gaussian
 
 The inverse-gaussian is even more heavier tailed when compared to the
-log-normal. This is likely going to be similar to the above log-normal,
-but even to a higher extreme.
+log-normal. 
 
 This requires writing a custom Stan function since the inverse-gaussian
 is not actually implemented natively in Stan.
@@ -1413,9 +1412,9 @@ All of the models above have their parameters estimated using only
 observations that are relevant to that parameter. For example, only
 rating combinations with `zone 1` contribute to the estimation of the
 coefficient relevant to `zone 1`. However, many of the rating
-combinations have much smaller claim and/or exposure counts when
-compared to other, more popular combinations. That is, many of the
-rating combinations are sparse.
+levels within each rating variable have much smaller claim and/or exposure counts when
+compared to other, more popular levels. That is, many of the
+rating levels are sparse.
 
 A common practice is to simply group specific levels together to get rid
 of this sparsity (discussed in "The Dataset"). However, as mentioned
@@ -1466,13 +1465,18 @@ Equivalently, to illustrate the hierarchical structure that is going on:
 $$X_{i_{[jklm]}} \ \big| \ \mu_{i_{[jklm]}}, N_{i_{[jklm]}}, \phi \sim \text{Inverse Gaussian}\left(\mu_{i_{[jklm]}}, \frac{N_{i_{[jklm]}}}{\phi}\right),$$
 $$log(\mu_{i_{[jklm]}}) \ \big| \ \beta, \sigma_{[jklm]}^2 \sim \text{Normal}(\beta, \sigma_{[jklm]}^2),$$
 $$\beta \sim \text{Normal}(0, 7),$$
-$$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)}.$$
+$$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)},$$
+
+$$N_{i_{[jklm]}} \ \big| \ \xi_{i_{[jklm]}}, \nu \sim \text{Negative Binomial}(\xi_{i_{[jklm]}}, \nu),$$
+$$log(\xi_{i_{[jklm]}}) \ \big| \ \psi, \tau^2_{[jklm]} \sim \text{Normal}(\psi, \tau^2_{[jklm]}),$$
+$$\psi \sim \text{Normal}(0, 6),$$
+$$\tau^2_{[jklm]} \sim \text{Half Student's T}(3,0, 2.5).$$
 
 The average severity of any particular level of a rating variable comes from the same distribution with a common mean $\beta$ and variance $\sigma^2_{[jklm]}$. $\beta$ is the overall grand mean over all levels of a particular rating variable (which is the average severity ignoring all rating variables in this case). $\sigma^2_{[jklm]}$ represents the observed variation _between_ levels for a particular rating variable. Thus, individual levels within a rating variable are "pulled" towards the overall group mean, acting as additional regularization. More or less shrinkage is induced depending on the variation between levels, the number of observations for a level, and the amount of variance within a level. All rating variables share the same grand mean, since the effects are crossed.
 
 Priors are given to $\beta$ and $\sigma^2$ so that these parameters are inferred from the data. These parameters are inferred using all of the data regardless of the observation's level, which is where the "information sharing" aspect of partial pooling comes into play.
 
-The frequency model for $N_{i_{[jklm]}}$ follows similarly to the above formulation for severity.
+The frequency model for $N_{i_{[jklm]}}$ follows similarly to the formulation for severity.
 
 ### Stan Code and Model Evaluation
 
@@ -1817,7 +1821,7 @@ Assuming that the hierarchical Bayesian model above is sufficient, we can calcul
 
 As mentioned previously, a base class (the class where all other rating combinations are compared against) is required. In the data, this corresponds to the rating combination corresponding to row `r which(data$vehicle_exposure_years == max(data$vehicle_exposure_years))` (1 = km, 4 = zone, 7 = bonus, 9 = make) as this rating combination has the largest number of exposures. 
 
-We can now calculate posterior distributions for the relativities for each rating variable.
+We can now calculate posterior predictive distributions for the relativities for each rating variable.
 
 ```{r}
 base_class_row <- which(
@@ -1934,14 +1938,15 @@ create_tables(km_rels, "Kilometres")
 
 In this case, we can see that the estimated relativities (the median of each posterior predictive distribution) follows a monotonic pattern and likely no adjustment would be used here. 
 
-However, the point is to emphasize that while our single "best guess" might be 1, 1.231, 1.339, 1.458, and 1.717 
-for a chosen set of relativities, values such as 1, 1.3, 1.6, 1.8, 2 could have reasonably been observed as well. Another set could have been 1, 0.97, 1.4, 1.3, 1.5. These combinations aren't as likely, but plausible given the data.
+The 90% credible intervals describe a range in which the actual relativity of a future level K policyholder will fall with 90% probability, holding all other rating variables (bonus, make, and zone) constant. These are prediction intervals.
 
-In addition, notice that rating level 2 contains a relativity of 1 in its 90% credible interval. This implies that there is some probability that level 2 may actually be worse than the base class of level 1, even though our "best guess" would state it as higher. In fact, the posterior probability that the true relativity for level 2 is less than 1 is `r round(mean(km_rels[, 2] < 1), 3)`. Arguably, this is still not that likely (for comparison, the probabilities of the other levels having less than 1 relativity are 0.032, 0.012, and 0.001 for levels 3, 4, and 5, respectively) but it is not trivially 0 either. 
+The point is to emphasize that while our single "best prediction" might be 1, 1.231, 1.339, 1.458, and 1.717 for each rating level, values such as 1, 1.3, 1.6, 1.8, 2 could reasonably be observed as well. Another set could be 1, 0.97, 1.4, 1.3, 1.5. These combinations aren't as likely, but plausible given the data.
 
-In addition, we can quantify essentially any hypothesis that we want freely. As an example, some questions that the user may be interested in:
+In fact, we can calculate the probability of any future scenario occurring (with respect to the relativities) that we desire:
 
-- The exact probability that level 2 has a higher relativity than level 3 or 4 or 5:
+Some examples:
+
+- The exact probability that a future level 2 policyholder will have a higher relativity than a future level 3 or 4 or 5 policyholder (holding all other rating variables constant):
 
 ```{r}
 mean(!apply(
@@ -1950,7 +1955,8 @@ mean(!apply(
 	FUN = function(x) min(x)) == km_rels[, 2]
 	)
 ```
-- The exact probability that level 2 has a higher relativity than level 3 and 4 and 5:
+
+- The probability that a future level 2 policyholder has the largest relativity out of a single group of four future policyholders with levels 2, 3, 4, and 5 respectively (holding all other rating variables constant):
 
 ```{r}
 mean(apply(
@@ -1959,12 +1965,14 @@ mean(apply(
 	FUN = function(x) max(x)) == km_rels[, 2]
 	)
 ```
-- The exact probability that level 3 exceeds the relativity of level 2 by at least 0.1 (or any arbitrary constant):
+
+- The probability that a future level 3 policyholder exceeds the relativity of a future level 2 policyholder by at least 0.1 (or any arbitrary constant, and against holding all other rating variables constant):
 
 ```{r}
 mean(km_rels[, 3] - km_rels[, 2] > 0.1)
 ```
-Combining these probabilities with the expected costs (if any) of making the "wrong" decision (utilizing business sense and how conservative or aggressive the company wishes to be) can be used to make decisions. 
+
+...and so on
 
 ### Zone
 
@@ -2048,3 +2056,11 @@ create_tables(make_rels, "Make")
 ```
 
 ## Appendix: Model Convergence Checking
+
+For the sake of brevity, only the convergence of the most
+complicated model is illustrated (the hierarchical Bayesian model). The other models
+demonstrated convergence and appear to have mixed well, based on the same checks
+done in this section. This isn't that surprising because all of the models except
+the hierarchical Bayesian model are relatively simple in terms of parameterization. 
+
+### Checking the number of effective samples and Gelman-Rubin's R
