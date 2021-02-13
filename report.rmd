@@ -132,7 +132,6 @@ data %>%
 		rownames = FALSE,
 		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
 	formatRound(columns = 6:7, digits = 0)
-
 ```
 
 <br> As is typical, one row represents one unique combination of rating
@@ -2055,6 +2054,38 @@ The above plot in a table:
 create_tables(make_rels, "Make")
 ```
 
+## Credible Intervals for Pure Premiums
+
+If the actual predicted pure premiums are desired instead of relativities, we can derive these 
+easily as well:
+
+```{r}
+tibble(
+	kilometres = data$kilometres,
+	zone = data$zone,
+	bonus = data$bonus,
+	make = data$make,
+	median_pred = apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) median(x)),
+	lower = apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
+	upper = apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.95))
+) %>%
+	datatable(
+		rownames = FALSE,
+		colnames = c(
+			"Kilometres",
+			"Zone",
+			"Bonus",
+			"Make",
+			"Predicted Pure Premium",
+			"Lower 90% Credible Interval",
+			"Upper 90% Credible Interval"
+		),
+		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
+	formatRound(columns = 5:7, digits = 0)
+```
+
+As with the relativities, the 90% credible intervals describe a range in which the future pure premium of any policyholder with a specific set of rating variables will lie with 90% probability. For example: for a policyholder with kilometres = 1, zone = 4, bonus = 2, and make = 9, there is a 90% chance that their future pure premium will fall in the interval [228, 345].
+
 ## Appendix: Model Convergence Checking
 
 For the sake of brevity, only the convergence of the most
@@ -2064,3 +2095,105 @@ done in this section. This isn't that surprising because all of the models excep
 the hierarchical Bayesian model are relatively simple in terms of parameterization. 
 
 ### Checking the number of effective samples and Gelman-Rubin's R
+
+Autocorrelation within the MCMC process increases the variance of Monte Carlo estimates and thus, any inferences
+drawn from highly autocorrelated chains may be unreliable. The effective sample size attempts to correct for this autocorrelation,
+by reducing (or in some cases with autocorrelation < 1, increasing) the actual number
+of posterior samples by the amount of autocorrelation exhibited.
+
+Burkner (2017) recommends effective samples sizes of at least 1000 to get stable inferences.
+
+Viewing the summary statistics:
+
+```{r}
+as_tibble(summary(fit_re)$summary[, 9:10]) %>%
+	bind_cols(parameter = rownames(summary(fit_re)$summary), .) %>%
+	arrange(n_eff) %>%
+	datatable(
+		rownames = FALSE,
+		colnames = c(
+			"Parameter",
+			"Effective Sample Size",
+			"Rhat"
+		),
+		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
+	formatRound(columns = 2, digits = 0) %>%
+	formatRound(columns = 3, digits = 4)
+```
+
+As we can see here, the minimum effective size we have obtained is 3922 which is much larger than 1000. Therefore, Monte Carlo estimates are likely precise.
+
+Gelman and Rubin recommend that Rhat values for **all** parameters are less than 1.1. As we can see here, the largest Rhat we observe is 
+1.0016, which is well below 1.1. This is good evidence to suggest that all of the separate Markov Chains we have run have converged to the same posterior distribution.
+
+### Traceplots
+
+We can further verify that each separate chain has converged to the same posterior distribution, even though the chains were initialized at different starting points.
+
+Similar to the Rhat metric, the traceplots demonstrate separate chains converging to the same distribution (if there are no issues). These are often described as "fuzzy caterpillars" if the chains have converged. Each "fuzzy caterpillar" should overlap for the most part, and be randomly distributed about a constant (the posterior mean). If there are differences between chains, or if there is a clear systematic deviation from the average posterior parameter, it is very likely that some (or all) of the chains have not sampled from the true posterior distribution. 
+
+Graphing the traceplots for the parameters that generate our predicted pure premiums (and therefore, relativities) below:
+
+```{r, fig.align='center'}
+traceplot(
+	fit_re, 
+	pars = c(
+		"beta_frequency",
+		"beta_severity",
+		"dispersion_frequency",
+		"dispersion_severity",
+		"mu_freq",
+		"freq_sigma_km"
+		)
+)
+
+traceplot(
+	fit_re, 
+	pars = c(
+		"freq_sigma_zone",
+		"freq_sigma_bonus",
+		"freq_sigma_make",
+		"mu_sev",
+		"sev_sigma_km",
+		"sev_sigma_zone",
+		"sev_sigma_bonus",
+		"sev_sigma_make"
+		)
+)
+
+traceplot(
+	fit_re, 
+	pars = c(
+		"freq_re_km",
+		"freq_re_zone"
+		)
+)
+
+traceplot(
+	fit_re, 
+	pars = c(
+		"freq_re_bonus",
+		"freq_re_make"
+		)
+)
+
+traceplot(
+	fit_re, 
+	pars = c(
+		"sev_re_km",
+		"sev_re_zone"
+		)
+)
+
+traceplot(
+	fit_re, 
+	pars = c(
+		"sev_re_bonus",
+		"sev_re_make"
+		)
+)
+```
+
+The traceplots look ideal. 
+
+In conclusion, it seems that it is likely that there are no convergence issues. 
