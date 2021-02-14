@@ -2088,7 +2088,9 @@ tibble(
 
 As with the relativities, the 90% credible intervals describe a range in which the future pure premium of any policyholder with a specific set of rating variables will lie with 90% probability. For example: for a policyholder with kilometres = 1, zone = 4, bonus = 2, and make = 9, there is a 90% chance that their future pure premium will fall in the interval [228, 345].
 
-Note that for some of the rating combinations, there exists credible intervals of [0, 0]. This is not an error, as these rating combinations essentially have close to 100% probability of observing no claims. Thus, at least 90% of the time (and likely more) there will be 0 claims, and therefore, a pure premium of 0. That being said, the posterior means reveal that the model does **not** assign 0 probability to the event where pure premium is > 0. The table provides the probability that the predicted pure premium is greater than 0 for the rating combinations that have 90% credible intervals of [0, 0]:
+Note that for some of the rating combinations, there exists credible intervals of [0, 0]. This is not an error, as these rating combinations essentially have close to 100% probability of observing no claims. Thus, at least 90% of the time (and likely more) there will be 0 claims, and therefore, a pure premium of 0. That being said, the posterior means reveal that the model does **not** assign 0 probability to the event where pure premium is > 0. Indeed, some of the posterior distributions exhibit significant right skewness.
+
+The table below provides the probability that the predicted pure premium is greater than 0 for the rating combinations that have 90% credible intervals of [0, 0]:
 
 ```{r}
 related_0_medians_lower <- which(
@@ -2126,7 +2128,7 @@ tibble(
 
 The last column illustrates the posterior predictive probability that the future pure premium of a policyholder exceeds 0 for a particular set of rating combinations. Notice how all of these probabilities are greater than 0.
 
-By simply taking the compliment of these probabilities, 1 - Pr(pure premium > 0), we get the probability that the pure premium is exactly 0. Notice how all of these values are less than 0.05, which is what we used as the cutoff for our credible intervals. That is, for the 51 rating combinations above, there is <0.05 probability of actually observing a non-zero pure premium. 
+By simply taking the compliment of these probabilities, 1 - Pr(pure premium > 0), we get the probability that the pure premium is exactly 0. Notice how all of these values are less than 0.05, which is what we used as the cutoff for our credible intervals. That is, for the 51 rating combinations above, there is <0.05 probability of actually observing a non-zero pure premium.
 
 ## Appendix: Model Convergence Checking
 
