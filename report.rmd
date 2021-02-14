@@ -2144,6 +2144,7 @@ tibble(
 			"Predicted Pure Premium (median)",
 			"Pr(pure premium > 0)"
 		),
+		filter = list(position = 'top', clear = FALSE),
 		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
 	formatRound(columns = 5, digits = 3) %>%
 	formatRound(columns = 6, digits = 5)
@@ -2183,7 +2184,7 @@ as_tibble(summary(fit_re)$summary[, 9:10]) %>%
 			"Effective Sample Size",
 			"Rhat"
 		),
-		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
+		options = list(scrollY = 300, scrollX = 300)) %>%
 	formatRound(columns = 2, digits = 0) %>%
 	formatRound(columns = 3, digits = 4)
 ```
