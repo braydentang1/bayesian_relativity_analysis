@@ -2090,8 +2090,9 @@ tibble(
 			"Lower 90% Credible Interval",
 			"Upper 90% Credible Interval"
 		),
+		filter = list(position = 'top', clear = FALSE),
 		options = list(
-			scrollY = 300, searching = TRUE, height = "400px", scrollX = 300)
+			scrollY = 300, height = "700px", scrollX = 300)
 		) %>%
 	formatRound(columns = 5:8, digits = 0) 
 ```
@@ -2144,7 +2145,7 @@ tibble(
 			"Pr(pure premium > 0)"
 		),
 		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
-	formatRound(columns = 5, digits = 4) %>%
+	formatRound(columns = 5, digits = 3) %>%
 	formatRound(columns = 6, digits = 5)
 ```
 
