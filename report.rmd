@@ -1955,7 +1955,7 @@ mean(!apply(
 	)
 ```
 
-- The probability that a future level 2 policyholder has the largest relativity out of a single group of four future policyholders with levels 2, 3, 4, and 5 respectively (holding all other rating variables constant):
+- The probability that a future level 2 policyholder has the largest relativity out of a single group of four future policyholders with levels 2, 3, 4, and 5 (holding all other rating variables constant):
 
 ```{r}
 mean(apply(
@@ -1965,7 +1965,7 @@ mean(apply(
 	)
 ```
 
-- The probability that a future level 3 policyholder exceeds the relativity of a future level 2 policyholder by at least 0.1 (or any arbitrary constant, and against holding all other rating variables constant):
+- The probability that a future level 3 policyholder exceeds the relativity of a future level 2 policyholder by at least 0.1 (or any arbitrary constant, and again holding all other rating variables constant):
 
 ```{r}
 mean(km_rels[, 3] - km_rels[, 2] > 0.1)
@@ -2065,10 +2065,18 @@ tibble(
 	zone = data$zone,
 	bonus = data$bonus,
 	make = data$make,
-	mean_pred = apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) mean(x)),
-	median_pred = apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) median(x)),
-	lower = apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.05)),
-	upper = apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.95))
+	mean_pred = apply(
+		X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) mean(x)
+		),
+	median_pred = apply(
+		X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) median(x)
+		),
+	lower = apply(
+		X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.05)
+		),
+	upper = apply(
+		X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.95)
+		)
 ) %>%
 	datatable(
 		rownames = FALSE,
@@ -2082,7 +2090,9 @@ tibble(
 			"Lower 90% Credible Interval",
 			"Upper 90% Credible Interval"
 		),
-		options = list(scrollY = 300, searching = FALSE, scrollX = 300)) %>%
+		options = list(
+			scrollY = 300, searching = TRUE, height = "400px", scrollX = 300)
+		) %>%
 	formatRound(columns = 5:8, digits = 0) 
 ```
 
@@ -2094,11 +2104,15 @@ The table below provides the probability that the predicted pure premium is grea
 
 ```{r}
 related_0_medians_lower <- which(
-	apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.05)) == 0 
+	apply(
+		X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.05)
+		) == 0 
 )
 
 related_0_medians_upper <- which(
-	apply(X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.95)) == 0 
+	apply(
+		X = posterior_predictive_pp, MARGIN = 2, FUN = function(x) quantile(x, 0.95)
+		) == 0 
 )
 
 related_0_medians <- intersect(related_0_medians_lower, related_0_medians_upper)
@@ -2108,8 +2122,16 @@ tibble(
 	zone = data$zone[related_0_medians],
 	bonus = data$bonus[related_0_medians],
 	make = data$make[related_0_medians],
-	median_pred = apply(X = posterior_predictive_pp[, related_0_medians], MARGIN = 2, FUN = function(x) median(x)),
-	prob_gt_0 = apply(X = posterior_predictive_pp[, related_0_medians], MARGIN = 2, FUN = function(x) mean(x > 0))
+	median_pred = apply(
+		X = posterior_predictive_pp[, related_0_medians],
+		MARGIN = 2,
+		FUN = function(x) median(x)
+		),
+	prob_gt_0 = apply(
+		X = posterior_predictive_pp[, related_0_medians],
+		MARGIN = 2,
+		FUN = function(x) mean(x > 0)
+		)
 ) %>%
 	datatable(
 		rownames = FALSE,
@@ -2167,8 +2189,11 @@ as_tibble(summary(fit_re)$summary[, 9:10]) %>%
 
 As we can see here, the minimum effective size we have obtained is 3922 which is much larger than 1000. Therefore, Monte Carlo estimates are likely precise.
 
-Gelman and Rubin recommend that Rhat values for **all** parameters are less than 1.1. As we can see here, the largest Rhat we observe is 
-1.0016, which is well below 1.1. This is good evidence to suggest that all of the separate Markov Chains we have run have converged to the same posterior distribution.
+Gelman-Rubin's Rhat tries to assess how much each chain differs in terms of their variance. Due to the law of total variance, the marginal variance of a parameter can be estimated as a weighted average of the average within chain variance and the variance of the averages between chains.
+
+However, if all of the chains have converged to the same thing, the between chain variation should be negligible and therefore, the ratio of the weighted average estimator and the average variation within each individual chain should approximately be 1.
+
+Gelman and Rubin recommend that Rhat values for **all** parameters are less than 1.1. As we can see here, the largest Rhat we observe is 1.0016, which is well below 1.1. This is good evidence to suggest that all of the separate Markov Chains we have run have converged to the same posterior distribution. Thus, there is good evidence to suggest that there are no convergence issues.
 
 ### Traceplots
 
@@ -2240,4 +2265,4 @@ traceplot(
 
 The traceplots look ideal. 
 
-In conclusion, it seems that it is likely that there are no convergence issues. 
+In conclusion, there are likely no convergence issues. 
