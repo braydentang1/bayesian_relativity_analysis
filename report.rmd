@@ -2099,7 +2099,7 @@ tibble(
 
 As with the relativities, the 90% credible intervals describe a range in which the future pure premium of any policyholder with a specific set of rating variables will lie with 90% probability. For example: for a policyholder with kilometres = 1, zone = 4, bonus = 2, and make = 9, there is a 90% chance that their future pure premium will fall in the interval [228, 345].
 
-Note that for some of the rating combinations, there exists credible intervals of [0, 0]. This is not an error, as these rating combinations essentially have close to 100% probability of observing no claims. Thus, at least 90% of the time (and likely more) there will be 0 claims, and therefore, a pure premium of 0. That being said, the posterior means reveal that the model does **not** assign 0 probability to the event where pure premium is > 0. Indeed, some of the posterior distributions exhibit significant right skewness.
+Note that for some of the rating combinations, there exists credible intervals of [0, 0]. This is not an error, as these rating combinations essentially have close to 100% probability of observing no claims. Thus, at least 95% of the time there will be 0 claims, and therefore, a pure premium of 0. That being said, the posterior means reveal that the model does **not** assign 0 probability to the event where pure premium is > 0. Indeed, some of the posterior distributions exhibit significant right skewness.
 
 The table below provides the probability that the predicted pure premium is greater than 0 for the rating combinations that have 90% credible intervals of [0, 0]:
 
