@@ -592,14 +592,9 @@ posterior_pred_check <- function(posterior_predictive_samples, y, n, variable,
 }
 ```
 
-Note that these are misleading in the sense that they aren't actual
-assessments of predictive performance, but of in-sample fit as discussed
-above. Still, if the model severely underfits the underlying data then
-the model will very likely not predict well.
-
 ### Posterior Predictive Check - Frequency
 
-First, generate samples from the posterior predictive distribution. Then, perform the posterior predictive check (i.e. compare the generated data against the observed data).
+First, we generate samples from the posterior predictive distribution. Then, we perform posterior predictive checks for the frequency, severity, and pure premium distributions (i.e. compare the generated data against the observed data).
 
 ```{r Generate Samples}
 # Basically, flatten the matrix of frequencies to a vector, generate a vector 
@@ -1941,7 +1936,7 @@ The 90% credible intervals describe a range in which the actual relativity of a 
 
 The point is to emphasize that while our single "best prediction" might be 1, 1.231, 1.339, 1.458, and 1.717 for each rating level, values such as 1, 1.3, 1.6, 1.8, 2 could reasonably be observed as well. Another set could be 1, 0.97, 1.4, 1.3, 1.5. These combinations aren't as likely, but plausible given the data.
 
-In fact, we can calculate the probability of any future scenario occurring (with respect to the relativities) that we desire:
+In fact, we can calculate the probability of any future scenario occurring (with respect to the relativities):
 
 Some examples:
 
@@ -2166,7 +2161,7 @@ the hierarchical Bayesian model are relatively simple in terms of parameterizati
 
 Autocorrelation within the MCMC process increases the variance of Monte Carlo estimates and thus, any inferences
 drawn from highly autocorrelated chains may be unreliable. The effective sample size attempts to correct for this autocorrelation,
-by reducing (or in some cases with autocorrelation < 1, increasing) the actual number
+by restating (or in some cases with autocorrelation < 1, increasing) the actual number
 of posterior samples by the amount of autocorrelation exhibited.
 
 Burkner (2017) recommends effective samples sizes of at least 1000 to get stable inferences.
@@ -2191,11 +2186,11 @@ as_tibble(summary(fit_re)$summary[, 9:10]) %>%
 
 As we can see here, the minimum effective size we have obtained is 3922 which is much larger than 1000. Therefore, Monte Carlo estimates are likely precise.
 
-Gelman-Rubin's Rhat tries to assess how much each chain differs in terms of their variance. Due to the law of total variance, the marginal variance of a parameter can be estimated as a weighted average of the average within chain variance and the variance of the averages between chains.
+Gelman-Rubin's Rhat tries to assess convergence by analyzing the variance between and within chains. Due to the law of total variance, the marginal variance of a parameter can be estimated as a weighted average of the average within chain variance and the variance of the averages between chains.
 
 However, if all of the chains have converged to the same thing, the between chain variation should be negligible and therefore, the ratio of the weighted average estimator and the average variation within each individual chain should approximately be 1.
 
-Gelman and Rubin recommend that Rhat values for **all** parameters are less than 1.1. As we can see here, the largest Rhat we observe is 1.0016, which is well below 1.1. This is good evidence to suggest that all of the separate Markov Chains we have run have converged to the same posterior distribution. Thus, there is good evidence to suggest that there are no convergence issues.
+Gelman and Rubin recommend that **all** parameters have Rhat values less than 1.1. As we can see here, the largest Rhat we observe is 1.0016, which is well below 1.1. This is good evidence to suggest that all of the separate Markov Chains we have run have converged to the same posterior distribution. Thus, there is good evidence to suggest that there are no convergence issues.
 
 ### Traceplots
 
