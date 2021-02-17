@@ -1930,7 +1930,7 @@ The above plot in table format, with base class highlighted in blue:
 create_tables(km_rels, "Kilometres")
 ```
 
-In this case, we can see that the estimated relativities (the median of each posterior predictive distribution) follows a monotonic pattern and likely no adjustment would be used here. 
+In this case, we can see that the estimated relativities (the median of each posterior predictive distribution) follows a monotonic pattern and likely no adjustments would be needed.
 
 The 90% credible intervals describe a range in which the actual relativity of a future level K policyholder will fall with 90% probability, holding all other rating variables (bonus, make, and zone) constant. These are prediction intervals.
 
