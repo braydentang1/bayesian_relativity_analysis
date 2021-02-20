@@ -360,7 +360,7 @@ checks, but these are known to be biased for predictive performance
 because this involves in-sample data. Despite this, [some do suggest the use of 50% credible intervals to at least detect overfitting.](https://stats.stackexchange.com/questions/343420/bayesian-thinking-about-overfitting)
 
 Some argue that Bayesian methods cannot really overfit providing that uninformative priors
-are avoided, and in general, if marginalizing rather than maximization is done as much as possible. Informative priors encourage estimators to not fully rely on the underlying training dataset by introducing bias via. the prior. Marginalization is preferable to maximization since marginalization respects the presence of uncertainty through the weighting of each outcome with its posterior probability.
+are avoided, and in general, if marginalizing rather than maximization is done as much as possible. Informative priors encourage estimators to not fully rely on the underlying training dataset by introducing bias via. the prior. Marginalization is preferable to maximization since marginalization weighs each outcome with its posterior probability.
 
 Regardless, none of this allows for the ability to quantify how well the model actually predicts in absolute terms. 
 
