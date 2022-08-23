@@ -367,11 +367,11 @@ Regardless, none of this allows for the ability to quantify how well the model a
 ## Stan Code
 
 Below is the exact same model described above. In this case, we set
-$\tau$ and $\omega$ to 5 and 5.5, respectively, which are "weakly informative" priors.
+$\tau$ and $\omega$ to 1 and 1, respectively, which are "weakly informative" priors.
 No strong apriori beliefs regarding the effects exist (there is no context regarding the data)
 but regularization to shrink effects to 0, if it is justifiable, is desired.
 
-The variance parameter, $\alpha$, is set to 8. This is again a weakly informative prior.
+For the variance parameter, we use a half-Cauchy(0, 3) distribution. This is again a weakly informative prior.
 
 ```{stan output.var = "poisson_gamma_model"}
 data {
@@ -391,9 +391,9 @@ parameters {
 
 model {
   
-  beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5.5);
-  dispersion_severity ~ cauchy(0, 8);
+  beta_frequency ~ std_normal();
+  beta_severity ~ std_normal();
+  dispersion_severity ~ cauchy(0, 3);
   
   claim_count ~ poisson_log(X * beta_frequency + log(exposure));
   
@@ -458,7 +458,7 @@ if (refit == TRUE) {
 		poisson_gamma_model,
 		data = data_list,
 		chains = 6,
-		iter = 6000,
+		iter = 2000,
 		seed = 200350623,
 		cores = 6,
 		verbose = TRUE
@@ -772,12 +772,12 @@ $$X_{i} \big|N_{i}, \phi, \eta_{i} \sim Gamma\left(\frac{N_{i}}{\phi}, \frac{N_{
 $$\eta_{i} \big| \beta, R_{i} = exp(R_{i} \times \beta),$$
 $$N_{i} \big|\xi_{i}, \nu \sim \text{Negative Binomial}(\xi_{i}, \nu),$$
 $$\xi_{i} \big|\psi, R_{i} = exp(R_{i} \times \psi + log(\text{exposure}_{i})),$$
-$$\beta \sim Normal(0, 5.5),$$ 
-$$\psi \sim Normal(0, 5),$$
-$$\phi \sim \text{Half-Cauchy}(0, 8),$$
-$$\nu \sim \text{Half-Cauchy}(0, 15).$$ Note that the Negative Binomial
+$$\beta \sim Normal(0, 1),$$ 
+$$\psi \sim Normal(0, 1),$$
+$$\phi \sim \text{Half-Cauchy}(0, 3),$$
+$$\nu \sim \text{Half-Cauchy}(0, 10).$$ Note that the Negative Binomial
 is using the mean, dispersion parameterization in Stan (i.e.
-NegativeBinomial2).
+NegativeBinomial2). The Half-Cauchy is set to be super wide, since stronger priors will heavily favor models that have significant amounts of over-dispersion (leading to sampling issues if the data does not exhibit strong overdispersion).
 
 Compiling the model above in Stan:
 
@@ -800,10 +800,10 @@ parameters {
 
 model {
   
-  beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5.5);
-  dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 15); /* Larger variance here for the negative binomial 
+  beta_frequency ~ std_normal();
+  beta_severity ~ std_normal();
+  dispersion_severity ~ cauchy(0, 3);
+  dispersion_frequency ~ cauchy(0, 10); /* Larger variance here for the negative binomial 
   because the data did not appear to be that overdispersed and we need to allow for
   larger dispersion parameters to consider these cases */
   
@@ -832,7 +832,7 @@ if (refit == TRUE) {
 		nb_gamma,
 		data = data_list,
 		chains = 6,
-		iter = 6000,
+		iter = 2000,
 		seed = 200350623,
 		cores = 6,
 		verbose = TRUE
@@ -1014,10 +1014,10 @@ parameters {
 
 model {
   
-  beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5.5);
-  dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 15);
+  beta_frequency ~ std_normal();
+  beta_severity ~ std_normal();
+  dispersion_severity ~ cauchy(0, 3);
+  dispersion_frequency ~ cauchy(0, 10);
   
   claim_count ~ neg_binomial_2_log(
   	X * beta_frequency + log(exposure), dispersion_frequency
@@ -1044,7 +1044,7 @@ if (refit == TRUE) {
 		sm_nb_lognormal,
 		data = data_list,
 		chains = 6,
-		iter = 6000,
+		iter = 2000,
 		control = list(adapt_delta = 0.95),
 		seed = 200350623,
 		cores = 6,
@@ -1238,10 +1238,10 @@ parameters {
 
 model {
   
-  beta_frequency ~ normal(0, 5);
-  beta_severity ~ normal(0, 5.5);
-  dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 15);
+  beta_frequency ~ std_normal();
+  beta_severity ~ std_normal();
+  dispersion_severity ~ cauchy(0, 3);
+  dispersion_frequency ~ cauchy(0, 10);
   
   claim_count ~ neg_binomial_2_log(
   	X * beta_frequency + log(exposure), dispersion_frequency
@@ -1271,8 +1271,8 @@ if (refit == TRUE) {
 		sm_nb_ig,
 		data = data_list,
 		chains = 6,
-		iter = 6000,
-		control = list(adapt_delta = 0.95),
+		iter = 2000,
+		control = list(adapt_delta = 0.97),
 		seed = 200350623,
 		cores = 6,
 		verbose = TRUE
@@ -1443,13 +1443,13 @@ $$X_{i_{jklm}} \ \big| \ N_{i_{jklm}}, \phi, \mu_{i_{jklm}} \sim \text{Inverse G
 
 $$\mu_{i_{jklm}} \ \big| \ \beta, b_{ij}, b_{ik}, b_{il}, b_{im}  = exp(\beta + b_{ij} + b_{ik} + b_{il} + b_{im}),$$
 $$b_{i_{[jklm]}} \sim \text{Normal}(0, \sigma_{[jklm]}^2),$$
-$$\beta \sim \text{Normal}(0, 7),$$
+$$\beta \sim \text{Normal}(8, 2.5),$$
 $$N_{i_{jklm}} \ \big| \ \xi_{i_{jklm}}, \nu \sim \text{Negative Binomial}(\xi_{i_{jklm}}, \nu),$$
 $$\xi_{i_{[jklm]}} \ \big| \ \psi, t_{ij}, t_{ik}, t_{il}, t_{im} = exp(\psi + t_{ij} + t_{ik} + t_{il} + t_{im} + log(\text{exposure}_{i})),$$
 $$t_{i_{[jklm]}} \sim \text{Normal}(0, \tau_{[jklm]}^2),$$
-$$\psi \sim \text{Normal}(0, 6),$$
-$$\phi \sim \text{Half-Cauchy}(0, 8),$$
-$$\nu \sim \text{Half-Cauchy}(0, 15),$$
+$$\psi \sim \text{Normal}(1.6, 2.5),$$
+$$\phi \sim \text{Half-Cauchy}(0, 5),$$
+$$\nu \sim \text{Half-Cauchy}(0, 12),$$
 $$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)},$$
 $$\tau_{[jklm]}^2 \sim \text{Half Student's T(3, 0, 2.5)},$$
 where j, k, l, and m are the kilometre, zone, bonus, and make rating levels for the ith rating combination.
@@ -1458,12 +1458,12 @@ Equivalently, to illustrate the hierarchical structure that is going on:
 
 $$X_{i_{[jklm]}} \ \big| \ \mu_{i_{[jklm]}}, N_{i_{[jklm]}}, \phi \sim \text{Inverse Gaussian}\left(\mu_{i_{[jklm]}}, \frac{N_{i_{[jklm]}}}{\phi}\right),$$
 $$log(\mu_{i_{[jklm]}}) \ \big| \ \beta, \sigma_{[jklm]}^2 \sim \text{Normal}(\beta, \sigma_{[jklm]}^2),$$
-$$\beta \sim \text{Normal}(0, 7),$$
+$$\beta \sim \text{Normal}(0, 1),$$
 $$\sigma^2_{[jklm]} \sim \text{Half Student's T(3, 0, 2.5)},$$
 
 $$N_{i_{[jklm]}} \ \big| \ \xi_{i_{[jklm]}}, \nu \sim \text{Negative Binomial}(\xi_{i_{[jklm]}}, \nu),$$
 $$log(\xi_{i_{[jklm]}}) \ \big| \ \psi, \tau^2_{[jklm]} \sim \text{Normal}(\psi, \tau^2_{[jklm]}),$$
-$$\psi \sim \text{Normal}(0, 6),$$
+$$\psi \sim \text{Normal}(0, 1),$$
 $$\tau^2_{[jklm]} \sim \text{Half Student's T}(3,0, 2.5).$$
 
 The average severity of any particular level of a rating variable comes from the same distribution with a common mean $\beta$ and variance $\sigma^2_{[jklm]}$. $\beta$ is the overall grand mean over all levels of a particular rating variable (which is the average severity ignoring all rating variables in this case). $\sigma^2_{[jklm]}$ represents the observed variation _between_ levels for a particular rating variable. Thus, individual levels within a rating variable are "pulled" towards the overall group mean, acting as additional regularization. More or less shrinkage is induced depending on the variation between levels, the number of observations for a level, and the amount of variance within a level. All rating variables share the same grand mean, since the effects are crossed.
@@ -1577,25 +1577,25 @@ model {
 	vector[Nobs] mu_ig = mu_sev + rep_vector(0, Nobs);
 	
 	for (i in 1:Nobs) {
-		mu_nb[i] += freq_re_km[X[i, 1]] + freq_re_zone[X[i, 2]] + freq_re_bonus[X[i, 3]] + freq_re_make[X[i, 4]]; 
-	  mu_ig[i] += sev_re_km[X[i, 1]] + sev_re_zone[X[i, 2]] + sev_re_bonus[X[i, 3]] + sev_re_make[X[i, 4]];
+		mu_nb[i] += freq_re_km[X[i, 1]] + freq_re_zone[X[i, 2]] + freq_re_bonus[X[i, 3]] + freq_re_make[X[i, 4]];
+		mu_ig[i] += sev_re_km[X[i, 1]] + sev_re_zone[X[i, 2]] + sev_re_bonus[X[i, 3]] + sev_re_make[X[i, 4]];
 	}
   
-  mu_freq ~ normal(0, 6);
-  mu_sev ~ normal(0, 7);
-  dispersion_severity ~ cauchy(0, 8);
-  dispersion_frequency ~ cauchy(0, 15);
+  mu_freq ~ normal(1.6, 2.5);
+  mu_sev ~ normal(8, 2.5);
+  dispersion_severity ~ cauchy(0, 5);
+  dispersion_frequency ~ cauchy(0, 12);
   
   /* Eta parameters: all must be N(0, 1)  */
-  freq_eta_km ~ normal(0, 1);
-  freq_eta_zone ~ normal(0, 1);
-  freq_eta_bonus ~ normal(0, 1);
-  freq_eta_make ~ normal(0, 1);
+  freq_eta_km ~ std_normal();
+  freq_eta_zone ~ std_normal();
+  freq_eta_bonus ~ std_normal();
+  freq_eta_make ~ std_normal();
   
-  sev_eta_km ~ normal(0, 1);
-  sev_eta_zone ~ normal(0, 1);
-  sev_eta_bonus ~ normal(0, 1);
-  sev_eta_make ~ normal(0, 1);
+  sev_eta_km ~ std_normal();
+  sev_eta_zone ~ std_normal();
+  sev_eta_bonus ~ std_normal();
+  sev_eta_make ~ std_normal();
   
   /* Variation between levels for each rating variable */
   /* Default weakly informative again */
@@ -1654,8 +1654,8 @@ if (refit == TRUE) {
 			sm_random_effects,
 			data = data_re,
 			chains = 6,
-			iter = 6000,
-			control = list(adapt_delta = 0.97),
+			iter = 2000,
+			control = list(adapt_delta = 0.98),
 			seed = 200350623,
 			cores = 6,
 			verbose = TRUE
@@ -1704,11 +1704,11 @@ and then generating posterior predictive samples:
 
 ```{r}
 nb_mu <- matrix(
-	data = re_samples$mu_freq, nrow = 18000, ncol = nrow(data_with_severity)
+	data = re_samples$mu_freq, nrow = length(re_samples[[1]]), ncol = nrow(data_with_severity)
 	) + 
 	matrix(
 		data = log(data_with_severity$vehicle_exposure_years),
-		nrow = 18000,
+		nrow = length(re_samples[[1]]),
 		ncol = nrow(data_with_severity),
 		byrow = TRUE
 	) + 
@@ -1719,7 +1719,7 @@ nb_mu <- matrix(
 
 nb_disp <- matrix(
 	data = re_samples$dispersion_frequency,
-	nrow = 18000,
+	nrow = length(re_samples[[1]]),
 	ncol = nrow(data_with_severity)
 )
 
@@ -1735,7 +1735,7 @@ dim(claim_count_posterior_pred_nb) <- dim(nb_mu)
 
 ```{r}
 ig_mu <- matrix(
-	data = re_samples$mu_sev, nrow = 18000, ncol = nrow(data_with_severity)
+	data = re_samples$mu_sev, nrow = length(re_samples[[1]]), ncol = nrow(data_with_severity)
 ) +
 	re_samples$sev_re_km[, data_with_severity$kilometres] +
 	re_samples$sev_re_zone[, data_with_severity$zone] +
@@ -1745,7 +1745,7 @@ ig_mu <- matrix(
 ig_lambda <- claim_count_posterior_pred_nb / 
 	matrix(
 		data = re_samples$dispersion_severity,
-		nrow = 18000,
+		nrow = length(re_samples[[1]]),
 		ncol = nrow(data_with_severity)
 		)
 
@@ -1767,7 +1767,7 @@ rm(ig_lambda, ig_mu, nb_disp, nb_mu)
 posterior_predictive_pp <- claim_count_posterior_pred_nb / 
 	matrix(
 		data = data_with_severity$vehicle_exposure_years,
-		nrow = 18000,
+		nrow = length(re_samples[[1]]),
 		ncol = nrow(data_with_severity),
 		byrow = TRUE
 	) * severity_posterior_predictive
@@ -2204,8 +2204,6 @@ Graphing the traceplots for the parameters that generate our predicted pure prem
 traceplot(
 	fit_re, 
 	pars = c(
-		"beta_frequency",
-		"beta_severity",
 		"dispersion_frequency",
 		"dispersion_severity",
 		"mu_freq",
