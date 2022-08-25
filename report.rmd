@@ -1576,10 +1576,8 @@ model {
 	vector[Nobs] mu_nb = mu_freq + rep_vector(0, Nobs) + log(exposure);
 	vector[Nobs] mu_ig = mu_sev + rep_vector(0, Nobs);
 	
-	for (i in 1:Nobs) {
-		mu_nb[i] += freq_re_km[X[i, 1]] + freq_re_zone[X[i, 2]] + freq_re_bonus[X[i, 3]] + freq_re_make[X[i, 4]];
-		mu_ig[i] += sev_re_km[X[i, 1]] + sev_re_zone[X[i, 2]] + sev_re_bonus[X[i, 3]] + sev_re_make[X[i, 4]];
-	}
+	mu_nb += freq_re_km[X[, 1]] + freq_re_zone[X[, 2]] + freq_re_bonus[X[, 3]] + freq_re_make[X[, 4]];
+	mu_ig += sev_re_km[X[, 1]] + sev_re_zone[X[, 2]] + sev_re_bonus[X[, 3]] + sev_re_make[X[, 4]];
   
   mu_freq ~ normal(1.6, 2.5);
   mu_sev ~ normal(8, 2.5);
