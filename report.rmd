@@ -2167,9 +2167,11 @@ Burkner (2017) recommends effective samples sizes of at least 1000 to get stable
 Viewing the summary statistics:
 
 ```{r}
-as_tibble(summary(fit_re)$summary[, 9:10]) %>%
+table_check_n_eff <- as_tibble(summary(fit_re)$summary[, 9:10]) %>%
 	bind_cols(parameter = rownames(summary(fit_re)$summary), .) %>%
-	arrange(n_eff) %>%
+	arrange(n_eff)
+
+table_check_n_eff %>%
 	datatable(
 		rownames = FALSE,
 		colnames = c(
@@ -2182,13 +2184,13 @@ as_tibble(summary(fit_re)$summary[, 9:10]) %>%
 	formatRound(columns = 3, digits = 4)
 ```
 
-As we can see here, the minimum effective size we have obtained is 3922 which is much larger than 1000. Therefore, Monte Carlo estimates are likely precise.
+As we can see here, the minimum effective size we have obtained is `r round(min(table_check_n_eff$n_eff), 0)` which is larger than 1000. Therefore, Monte Carlo estimates are likely precise enough.
 
 Gelman-Rubin's Rhat tries to assess convergence by analyzing the variance between and within chains. Due to the law of total variance, the marginal variance of a parameter can be estimated as a weighted average of the average within chain variance and the variance of the averages between chains.
 
 However, if all of the chains have converged to the same thing, the between chain variation should be negligible and therefore, the ratio of the weighted average estimator and the average variation within each individual chain should approximately be 1.
 
-Gelman and Rubin recommend that **all** parameters have Rhat values less than 1.1. As we can see here, the largest Rhat we observe is 1.0016, which is well below 1.1. This is good evidence to suggest that all of the separate Markov Chains we have run have converged to the same posterior distribution. Thus, there is good evidence to suggest that there are no convergence issues.
+Gelman and Rubin recommend that **all** parameters have Rhat values less than 1.01. As we can see here, the largest Rhat we observe is `r max(table_check_n_eff$Rhat)`, which does not exceed 1.01. This is good evidence to suggest that all of the separate Markov Chains we have run have converged to the same posterior distribution. Thus, there is good evidence to suggest that there are no convergence issues.
 
 ### Traceplots
 
@@ -2259,3 +2261,5 @@ traceplot(
 The traceplots look ideal. 
 
 In conclusion, there are likely no convergence issues. 
+
+<br>
